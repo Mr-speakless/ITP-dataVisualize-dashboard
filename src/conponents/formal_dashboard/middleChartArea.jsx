@@ -12,6 +12,7 @@ const initialDisplayMode = {
 const MiddleChartArea = () => {
   const [chart, setChart] = useState(true)
   const [displayMode, setDisplayMode] = useState(initialDisplayMode)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   //here I need a new js function fetchData_c_meta(), (not the fetchData_c_meta in dataFetchTest folder) and return the basic information of the data scope.
 
   return (
@@ -28,14 +29,16 @@ const MiddleChartArea = () => {
 
         <div className="flex w-full max-w-[1200px] flex-col gap-7 rounded-xl p-4 shadow-[0_0_8px_0_rgba(0,0,0,0.15)]">
           <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            
             <ViewSwitcher value={displayMode} onChange={setDisplayMode} />
-            <DataFilterBar />
+            <DataFilterBar
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={setIsSidebarOpen}
+            />
           </div>
           {chart ? <p>linechart</p> : <p>map chart</p>}
           <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |
-            scale={displayMode.scale}
+            scale={displayMode.scale} | sidebarOpen={String(isSidebarOpen)}
           </p>
         </div>
       </div>
