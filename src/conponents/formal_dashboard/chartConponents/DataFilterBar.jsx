@@ -1,11 +1,20 @@
 import editIcon from '../../../assets/editIcon.svg?raw'
+import SideBar from './SideBar.jsx'
 
 const buttonBaseClassName =
   'group inline-flex items-center rounded-[4px] border-2 px-3 py-3 transition-colors duration-150'
 
-const DataFilterBar = ({ isSidebarOpen = false, onToggleSidebar }) => {
+const DataFilterBar = ({
+  isSidebarOpen = false,
+  onToggleSidebar,
+  sidebarProps,
+}) => {
   return (
-    <div className="flex items-center justify-end" data-name="DataFilterBar" data-node-id="79:645">
+    <div
+      className="relative flex items-center justify-end"
+      data-name="DataFilterBar"
+      data-node-id="79:645"
+    >
       <button
         type="button"
         onClick={() => onToggleSidebar?.(!isSidebarOpen)}
@@ -17,10 +26,7 @@ const DataFilterBar = ({ isSidebarOpen = false, onToggleSidebar }) => {
         aria-pressed={isSidebarOpen}
         data-node-id="79:662"
       >
-        <span
-          className="flex items-center justify-center gap-2 p-2"
-          data-node-id="79:663"
-        >
+        <span className="flex items-center justify-center gap-2 p-2" data-node-id="79:663">
           <span
             className="h-5 w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current"
             aria-hidden="true"
@@ -32,6 +38,11 @@ const DataFilterBar = ({ isSidebarOpen = false, onToggleSidebar }) => {
           </span>
         </span>
       </button>
+      <SideBar
+        isOpen={isSidebarOpen}
+        onClose={() => onToggleSidebar?.(false)}
+        {...sidebarProps}
+      />
     </div>
   )
 }
