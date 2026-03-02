@@ -16,7 +16,7 @@ const TopNavBar = () => {
                     data-node-id="67:263"
                 >
                     <span
-                        className="font-display text-topbar font-extrabold leading-none text-white"
+                        className="ty-topbar leading-none text-white"
                         data-node-id="67:264"
                     >
                         C-19
@@ -24,7 +24,7 @@ const TopNavBar = () => {
                 </div>
 
                 <span
-                    className="font-display text-topbar font-extrabold leading-none text-white"
+                    className="ty-topbar leading-none text-white"
                     data-node-id="67:265"
                 >
                     IMPACT PROJECT

@@ -13,7 +13,7 @@ const IntroDashboard = () => {
           data-node-id="67:269"
         >
           <h1
-            className="font-display text-[2.75rem] leading-[1.1] font-bold uppercase text-white sm:text-[4rem] lg:text-display lg:leading-[1.25]"
+            className="ty-title text-[2.75rem] leading-[1.1] text-white sm:text-[4rem] lg:text-display lg:leading-[1.25]"
             data-node-id="67:270"
           >
             COVID-19 Dashboard

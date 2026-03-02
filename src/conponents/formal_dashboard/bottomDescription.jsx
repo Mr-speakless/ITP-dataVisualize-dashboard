@@ -68,13 +68,13 @@ const BottomDescription = () => {
             >
                 <div className="space-y-5">
                     <h2
-                        className="font-display text-h2 font-bold text-white"
+                        className="ty-h2 text-white"
                         data-node-id="67:439"
                     >
                         Dashboard Tools and Technologies&gt;&gt;
                     </h2>
                     <p
-                        className="max-w-5xl font-display text-body font-normal text-white"
+                        className="ty-body max-w-5xl text-white"
                         data-node-id="67:440"
                     >
                         Coding languages, libraries, and tools used to build the COVID-19
@@ -82,7 +82,7 @@ const BottomDescription = () => {
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-9 font-display text-body font-normal text-white">
+                <div className="ty-body flex flex-col gap-9 text-white">
                     {contentBlocks.map((block, index) => (
                         <div
                             key={block.title}
