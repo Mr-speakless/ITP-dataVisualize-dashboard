@@ -1,11 +1,13 @@
-import RequestFrom from './conponent/dataFetchTest/dataRequestForm.jsx'
+import DesignSystemPreview from './conponents/formal_dashboard/DesignSystemPreview.jsx'
+import RequestForm from './conponents/dataFetchTest/dataRequestForm.jsx'
+import Dashboard from './conponents/formal_dashboard/dashboard.jsx'
 
 function App() {
-
   return (
-    <>
-      <RequestFrom/>
-    </>
+    // <DesignSystemPreview>
+    //   {/* <RequestForm /> */}
+    // </DesignSystemPreview>
+    <Dashboard />
   )
 }
 

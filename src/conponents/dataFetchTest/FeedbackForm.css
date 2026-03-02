@@ -1,0 +1,96 @@
+nav {
+    background-color: var(--color-theme);
+    color: var(--color-white);
+    text-align: center;
+    font-size: var(--text-h2);
+}
+
+.feedback-form {
+    max-width: 28rem;
+    margin: 2rem auto 0;
+    padding: 1.5rem;
+    background-color: var(--color-white);
+    border-radius: var(--radius-block);
+    box-shadow: var(--shadow-card);
+    font-family: var(--font-display);
+    border: 1px solid var(--color-grey);
+}
+
+.feedback-form h2 {
+    font-size: var(--text-h2);
+    line-height: var(--text-h2--line-height);
+    margin-bottom: 0.75rem;
+}
+
+.feedback-form p {
+    font-size: var(--text-small-label);
+    line-height: var(--text-small-label--line-height);
+    color: var(--color-dark-grey);
+    margin-bottom: 1rem;
+}
+
+.feedback-form input[type="text"],
+.feedback-form input[type="email"],
+.feedback-form textarea {
+    width: 100%;
+    margin-bottom: 0.875rem;
+    padding: 0.875rem 1rem;
+    font-size: var(--text-small-label);
+    color: var(--color-black);
+    background-color: var(--color-grey-bg);
+    border: 1px solid var(--color-grey);
+    border-radius: 0.75rem;
+}
+
+.feedback-form input[type="text"]::placeholder,
+.feedback-form input[type="email"]::placeholder,
+.feedback-form textarea::placeholder {
+    color: var(--color-medium-grey);
+}
+
+.feedback-form textarea {
+    resize: vertical;
+}
+
+.feedback-form button {
+    width: 100%;
+    border: none;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1.25rem;
+    font-size: var(--text-small-label);
+    font-weight: 700;
+    color: var(--color-white);
+    background-color: var(--color-theme);
+    cursor: pointer;
+    transition: filter 180ms ease;
+}
+
+.feedback-form button:hover {
+    filter: brightness(0.94);
+}
+
+.card {
+    padding: 1.25rem;
+    background-color: var(--color-white);
+    border-radius: var(--radius-block);
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--color-grey);
+    box-shadow: var(--shadow-card);
+}
+
+.dataCard {
+    margin: 2.5rem 0 0;
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: center;
+    align-items: stretch;
+    color: var(--color-black);
+}
+
+@media only screen and (max-width: 600px) {
+    .feedback-form {
+        width: 100%;
+    }
+}

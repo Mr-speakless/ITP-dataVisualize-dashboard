@@ -1,6 +1,5 @@
 import {useState} from 'react'
 import './FeedbackForm.css'; // Import CSS for styling
-import FetchData from './fetchData';
 import FetchData_use from './fetchData_use'
 //test version 1.0
 //except achive the function: 
@@ -8,7 +7,7 @@ import FetchData_use from './fetchData_use'
 //2. then the form use Submit action to call a data fetch function, 
 // fetch funciton takes the form data as the paramater to create links
 //then use 'use' function to enetuallly return the data in json fromat as a card infromation on the web page.
-const RequestFrom = () => {
+const RequestForm = () => {
     const [requestData, setRequestData] = useState({
         date: '',
         region: '',
@@ -70,4 +69,4 @@ const RequestFrom = () => {
         </>
     )
 }
-export default RequestFrom;
+export default RequestForm;

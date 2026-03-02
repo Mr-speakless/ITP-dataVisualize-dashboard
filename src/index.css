@@ -1,1 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Work+Sans:wght@700&display=swap");
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Work Sans", sans-serif;
+  --font-display: "JetBrains Mono", monospace;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-theme: #00779f;
+  --color-accent: #ecf1f4;
+  --color-black: #000000;
+  --color-dark-grey: #4e4e4e;
+  --color-medium-grey: #8d8d8d;
+  --color-cold-grey: #94a1b0;
+  --color-grey: #dcdcdc;
+  --color-grey-bg: #f3f5f7;
+  --color-white: #ffffff;
+
+  --text-display: 5rem;
+  --text-display--line-height: 1.25;
+  --text-h2: 1.75rem;
+  --text-h2--line-height: 1.083;
+  --text-body: 1.25rem;
+  --text-body--line-height: 1;
+  --text-topbar: 1.0817rem;
+  --text-topbar--line-height: 1;
+  --text-small-label: 1rem;
+  --text-small-label--line-height: 1.083;
+
+  --radius-panel: 1.5rem;
+  --radius-block: 1rem;
+
+  --shadow-card: 0 18px 40px rgba(78, 78, 78, 0.08);
+  --shadow-swatch: inset 0 0 12px rgba(0, 0, 0, 0.05);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--color-grey-bg);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-grey-bg);
+    color: var(--color-black);
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
