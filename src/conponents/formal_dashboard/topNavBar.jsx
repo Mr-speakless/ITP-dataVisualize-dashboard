@@ -11,7 +11,7 @@ const TopNavBar = () => {
                 data-node-id="67:262"
             >
                 <div
-                    className="flex h-[31px] w-[74.765px] items-center justify-center border-[2.031px] border-white bg-black px-[15px] py-[3px]"
+                    className="flex h-[31px] w-[74.765px] items-center justify-center border-[2.031px] border-white bg-black"
                     data-name="C-19"
                     data-node-id="67:263"
                 >
