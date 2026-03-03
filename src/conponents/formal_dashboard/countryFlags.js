@@ -1,5 +1,21 @@
-import { countries as supportedCountryCodes } from 'country-flag-icons'
-import * as FlagIcons from 'country-flag-icons/react/3x2'
+const flagModules = import.meta.glob('../../assets/country-flags/*.svg', {
+  eager: true,
+  import: 'default',
+})
+
+const flagUrlByCode = Object.entries(flagModules).reduce((accumulator, [path, url]) => {
+  const fileName = path.split('/').pop()
+
+  if (!fileName) {
+    return accumulator
+  }
+
+  const countryCode = fileName.replace('.svg', '')
+  accumulator[countryCode] = url
+  return accumulator
+}, {})
+
+const supportedCountryCodes = Object.keys(flagUrlByCode)
 
 const countryCodeOverrides = {
   Bolivia: 'BO',
@@ -298,14 +314,14 @@ export function getCountryCodeForRegion(regionName) {
   return generatedCountryNameToCode[normalizedRegion] ?? null
 }
 
-export function getFlagComponentForRegion(regionName) {
+export function getFlagUrlForRegion(regionName) {
   const countryCode = getCountryCodeForRegion(regionName)
 
   if (!countryCode) {
     return null
   }
 
-  return FlagIcons[countryCode.replace(/-/g, '_')] ?? null
+  return flagUrlByCode[countryCode] ?? null
 }
 
 export function getNationalColorForRegion(regionName) {

@@ -8,7 +8,7 @@ import {
   getMetricLabel,
   getSortValue,
 } from '../worldData.js'
-import { getFlagComponentForRegion, getNationalColorForRegion } from '../countryFlags.js'
+import { getFlagUrlForRegion, getNationalColorForRegion } from '../countryFlags.js'
 
 const iconClassName =
   'shrink-0 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current'
@@ -21,7 +21,7 @@ function CountryRow({
   onToggle,
 }) {
   const value = getSortValue(country, metric, sortMode)
-  const FlagComponent = getFlagComponentForRegion(country.name)
+  const flagUrl = getFlagUrlForRegion(country.name)
   const nationalColor = getNationalColorForRegion(country.name)
   const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
   const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
@@ -40,8 +40,14 @@ function CountryRow({
         aria-hidden="true"
       />
       <span className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey-bg" aria-hidden="true">
-        {FlagComponent ? (
-          <FlagComponent title={country.name} className="h-[18px] w-auto" />
+        {flagUrl ? (
+          <img
+            src={flagUrl}
+            alt=""
+            className="h-[18px] w-auto"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <span className="block h-[18px] w-[29px] bg-grey" />
         )}
