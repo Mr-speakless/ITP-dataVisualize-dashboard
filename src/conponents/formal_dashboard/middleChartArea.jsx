@@ -4,23 +4,20 @@ import ChartViewToggle from './chartConponents/ChartViewToggle.jsx'
 import CountryTrendChart from './chartConponents/CountryTrendChart.jsx'
 import DataFilterBar from './chartConponents/DataFilterBar.jsx'
 import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
+import TimeProgressBar from './chartConponents/TimeProgressBar.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import {
   DEFAULT_WORLD_DATE,
   buildCountryTrendSeriesPoints,
   buildTrendDateRange,
   buildWorldCountryRows,
-  buildWorldSummary,
   fetchWorldRegionSeries,
   fetchWorldDaySnapshot,
   fetchWorldMeta,
   formatDashboardNumber,
   getDisplayValue,
   getFallbackWorldDate,
-  getMetricLabel,
-  getScaleLabel,
   getSortValue,
-  getTimeModeLabel,
   isDateAvailable,
 } from './worldData.js'
 
@@ -62,6 +59,10 @@ function getTopTenCountryNames(countries) {
   return countries.slice(0, 10).map((country) => country.name)
 }
 
+function getEarliestAvailableWorldDate(meta) {
+  return meta?.c_dates?.[0] ?? DEFAULT_WORLD_DATE
+}
+
 const MiddleChartArea = () => {
   const [chart, setChart] = useState(true)
   const [displayMode, setDisplayMode] = useState(initialDisplayMode)
@@ -69,6 +70,8 @@ const MiddleChartArea = () => {
   const [meta, setMeta] = useState(null)
   const [countries, setCountries] = useState([])
   const [selectedDate, setSelectedDate] = useState(DEFAULT_WORLD_DATE)
+  const [timelineStartDate, setTimelineStartDate] = useState('')
+  const [timelineDate, setTimelineDate] = useState(DEFAULT_WORLD_DATE)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState(initialSortMode)
   const [sortDirection, setSortDirection] = useState(initialSortDirection)
@@ -152,6 +155,60 @@ const MiddleChartArea = () => {
 
     return () => controller.abort()
   }, [meta, selectedDate])
+
+  useEffect(() => {
+    if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0) {
+      return
+    }
+
+    const boundedDates = meta.c_dates.filter((date) => date <= selectedDate)
+
+    if (boundedDates.length === 0) {
+      return
+    }
+
+    setTimelineStartDate((currentStartDate) => {
+      if (!currentStartDate) {
+        return boundedDates[0]
+      }
+
+      if (boundedDates.includes(currentStartDate)) {
+        return currentStartDate
+      }
+
+      return (
+        boundedDates.find(
+          (date) => date.split('-')[0] === String(selectedDate).split('-')[0]
+        ) ?? boundedDates[0]
+      )
+    })
+  }, [meta, selectedDate])
+
+  useEffect(() => {
+    if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0 || !timelineStartDate) {
+      return
+    }
+
+    const rangedDates = meta.c_dates.filter(
+      (date) => date >= timelineStartDate && date <= selectedDate
+    )
+
+    if (rangedDates.length === 0) {
+      return
+    }
+
+    setTimelineDate((currentTimelineDate) => {
+      if (rangedDates.includes(currentTimelineDate)) {
+        return currentTimelineDate
+      }
+
+      if (currentTimelineDate && currentTimelineDate < rangedDates[0]) {
+        return rangedDates[0]
+      }
+
+      return rangedDates[rangedDates.length - 1]
+    })
+  }, [meta, selectedDate, timelineStartDate])
 
   const sortedCountries = useMemo(
     () => sortCountries(countries, displayMode.metric, sortMode, sortDirection),
@@ -269,8 +326,8 @@ const MiddleChartArea = () => {
   }, [chart, countrySeriesByName, selectedCountryRows])
 
   const trendDates = useMemo(
-    () => buildTrendDateRange(meta, selectedDate),
-    [meta, selectedDate]
+    () => buildTrendDateRange(meta, timelineDate, timelineStartDate),
+    [meta, timelineDate, timelineStartDate]
   )
 
   const trendSeries = useMemo(
@@ -292,21 +349,6 @@ const MiddleChartArea = () => {
         .filter(Boolean),
     [countrySeriesByName, displayMode, selectedCountryRows, trendDates]
   )
-
-  const worldSummary = useMemo(
-    () => buildWorldSummary(countries, displayMode),
-    [countries, displayMode]
-  )
-
-  const worldSummaryValue =
-    displayMode.scale === 'per-100k'
-      ? displayMode.timeMode === 'on-day'
-        ? worldSummary.per100kDaily
-        : worldSummary.per100kTotal
-      : displayMode.timeMode === 'on-day'
-        ? worldSummary.daily
-        : worldSummary.total
-
 
   const selectedCountriesDebug = selectedCountryRows.length
     ? selectedCountryRows
@@ -376,6 +418,8 @@ const MiddleChartArea = () => {
                   setSortMode(initialSortMode)
                   setSortDirection(initialSortDirection)
                   setSelectedDate(getFallbackWorldDate(meta))
+                  setTimelineStartDate(getEarliestAvailableWorldDate(meta))
+                  setTimelineDate(getFallbackWorldDate(meta))
                   setSelectedCountries(
                     getTopTenCountryNames(
                       sortCountries(countries, displayMode.metric, initialSortMode, initialSortDirection)
@@ -394,6 +438,10 @@ const MiddleChartArea = () => {
               )
             }
           />
+           <div className="ty-small text-dark-grey flex flex-row gap-10">
+            <div>Start Date: {timelineStartDate}</div>
+            <div>Chart Showing Date: {timelineDate}</div>
+           </div>
           {chart ? (
             <CountryTrendChart
               series={trendSeries}
@@ -403,14 +451,24 @@ const MiddleChartArea = () => {
               error={error || seriesError}
             />
           ) : (
-            <p>map chart</p>
+            <p>map chart - current timeline date {timelineDate}</p>
           )}
           <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |
             scale={displayMode.scale} | sortMode={sortMode} |
-            sortDirection={sortDirection} | date={selectedDate} |
+            sortDirection={sortDirection} | maxDate={selectedDate} |
+            startDate={timelineStartDate} | timelineDate={timelineDate} |
             sidebarOpen={String(isSidebarOpen)} | {statusText}
           </p>
+          <TimeProgressBar
+            dates={meta?.c_dates ?? []}
+            startDate={timelineStartDate}
+            endDate={selectedDate}
+            valueDate={timelineDate}
+            onStartDateChange={setTimelineStartDate}
+            onEndDateChange={setSelectedDate}
+            onValueDateChange={setTimelineDate}
+          />
         </div>
       </div>
     </section>

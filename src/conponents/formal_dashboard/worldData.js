@@ -135,14 +135,12 @@ export function buildWorldCountryRows(meta, dayItems) {
   })
 }
 
-export function buildTrendDateRange(meta, selectedDate) {
+export function buildTrendDateRange(meta, endDate, startDate) {
   const dates = Array.isArray(meta?.c_dates) ? meta.c_dates : []
 
-  if (!selectedDate) {
-    return dates
-  }
-
-  return dates.filter((date) => date <= selectedDate)
+  return dates.filter(
+    (date) => (!startDate || date >= startDate) && (!endDate || date <= endDate)
+  )
 }
 
 export function buildCountryTrendSeriesPoints(country, seriesItems, displayMode, dates) {
