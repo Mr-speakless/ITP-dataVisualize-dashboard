@@ -1,5 +1,6 @@
 import ascendingIcon from '../../../assets/ascendingIcon.svg?raw'
 import descendingIcon from '../../../assets/descendingIcon.svg?raw'
+import resetDataIcon from '../../../assets/ResetData.svg?raw'
 import searchIcon from '../../../assets/searchIcon.svg?raw'
 import sortIcon from '../../../assets/sortIcon.svg?raw'
 import {
@@ -32,6 +33,7 @@ function CountryRow({
 }) {
   const accentColor = rowAccentColors[index % rowAccentColors.length]
   const value = getSortValue(country, metric, sortMode)
+  const selectionIndicatorClassName = isSelected ? accentColor : 'bg-white'
 
   return (
     <button
@@ -42,9 +44,7 @@ function CountryRow({
       data-name="CountryRow"
     >
       <span
-        className={`h-[18px] w-[18px] rounded-[5px] border border-medium-grey ${
-          isSelected ? 'bg-medium-grey' : 'bg-white'
-        }`}
+        className={`h-[18px] w-[18px] rounded-[5px] border border-medium-grey ${selectionIndicatorClassName}`}
         aria-hidden="true"
       />
       <span className={`h-[18px] w-[29px] shrink-0 ${accentColor}`} aria-hidden="true" />
@@ -69,6 +69,8 @@ const SideBar = ({
   selectedCountries,
   onToggleCountry,
   onSelectTopTen,
+  isTopTenSelected,
+  onResetSidebar,
   metric,
 }) => {
   if (!isOpen) {
@@ -107,24 +109,39 @@ const SideBar = ({
           </button>
         </div>
 
-        <label
-          className="flex h-8 items-center gap-[10px] rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-medium-grey transition-colors duration-150 focus-within:border-theme focus-within:text-theme"
-          data-node-id="75:450"
-        >
-          <span
-            className={`${iconClassName} h-4 w-4`}
-            aria-hidden="true"
-            data-node-id="75:451"
-            dangerouslySetInnerHTML={{ __html: searchIcon }}
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            placeholder="Search for a country"
-            className="ty-small w-full bg-transparent text-black outline-none placeholder:text-[#d9d9d9]"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <label
+            className="flex h-8 min-w-0 flex-1 items-center gap-[10px] rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-medium-grey transition-colors duration-150 focus-within:border-theme focus-within:text-theme"
+            data-node-id="75:450"
+          >
+            <span
+              className={`${iconClassName} h-4 w-4`}
+              aria-hidden="true"
+              data-node-id="75:451"
+              dangerouslySetInnerHTML={{ __html: searchIcon }}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="Search for a country"
+              className="ty-small w-full bg-transparent text-black outline-none placeholder:text-[#d9d9d9]"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onResetSidebar}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border-2 border-grey bg-white text-medium-grey transition-colors duration-150 hover:border-theme hover:text-theme"
+            aria-label="Reset sidebar filters"
+            title="Reset sidebar filters"
+          >
+            <span
+              className={`${iconClassName} h-[18px] w-[18px]`}
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: resetDataIcon }}
+            />
+          </button>
+        </div>
 
         <div className="flex h-10 items-start justify-between gap-3" data-node-id="75:453">
           <div
@@ -174,7 +191,12 @@ const SideBar = ({
             onClick={onSelectTopTen}
             className="flex items-center gap-2 rounded-[4px] px-1 py-1 text-black transition-colors duration-150 hover:bg-grey-bg"
           >
-            <span className="h-[18px] w-[18px] rounded-[5px] bg-medium-grey" aria-hidden="true" />
+            <span
+              className={`h-[18px] w-[18px] rounded-[5px] border border-medium-grey ${
+                isTopTenSelected ? 'bg-theme' : 'bg-white'
+              }`}
+              aria-hidden="true"
+            />
             <span className="ty-small">Select Top 10</span>
           </button>
           <span className="ty-small text-black">

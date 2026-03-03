@@ -52,6 +52,10 @@ function toggleCountrySelection(selectedCountries, countryName) {
   return [...selectedCountries, countryName]
 }
 
+function getTopTenCountryNames(countries) {
+  return countries.slice(0, 10).map((country) => country.name)
+}
+
 const MiddleChartArea = () => {
   const [chart, setChart] = useState(true)
   const [displayMode, setDisplayMode] = useState(initialDisplayMode)
@@ -157,6 +161,17 @@ const MiddleChartArea = () => {
     )
   }, [searchQuery, sortedCountries])
 
+  const filteredTopTenCountryNames = useMemo(
+    () => getTopTenCountryNames(filteredCountries),
+    [filteredCountries]
+  )
+
+  const isTopTenSelected =
+    filteredTopTenCountryNames.length > 0 &&
+    filteredTopTenCountryNames.every((countryName) =>
+      selectedCountries.includes(countryName)
+    )
+
   useEffect(() => {
     if (countries.length === 0) {
       setSelectedCountries([])
@@ -252,9 +267,32 @@ const MiddleChartArea = () => {
                     toggleCountrySelection(currentSelection, countryName)
                   ),
                 onSelectTopTen: () =>
+                  setSelectedCountries((currentSelection) => {
+                    if (
+                      filteredTopTenCountryNames.length > 0 &&
+                      filteredTopTenCountryNames.every((countryName) =>
+                        currentSelection.includes(countryName)
+                      )
+                    ) {
+                      return currentSelection.filter(
+                        (countryName) => !filteredTopTenCountryNames.includes(countryName)
+                      )
+                    }
+
+                    return filteredTopTenCountryNames
+                  }),
+                isTopTenSelected,
+                onResetSidebar: () => {
+                  setSearchQuery('')
+                  setSortMode(initialSortMode)
+                  setSortDirection(initialSortDirection)
+                  setSelectedDate(getFallbackWorldDate(meta))
                   setSelectedCountries(
-                    filteredCountries.slice(0, 10).map((country) => country.name)
-                  ),
+                    getTopTenCountryNames(
+                      sortCountries(countries, displayMode.metric, initialSortMode, initialSortDirection)
+                    )
+                  )
+                },
                 metric: displayMode.metric,
               }}
             />
