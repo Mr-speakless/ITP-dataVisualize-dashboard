@@ -1,32 +1,23 @@
 const IntroDashboard = () => {
   return (
-    <section
-      className="bg-theme px-6 py-8 text-white sm:px-10 sm:py-10 lg:px-0"
-      data-node-id="67:267"
-    >
-      <div
-        className="mx-auto flex w-full max-w-[1300px] flex-col gap-1"
-        data-node-id="67:268"
-      >
-        <div
-          className="px-0 py-2 sm:pl-6 lg:pl-[50px] lg:pr-[10px]"
-          data-node-id="67:269"
-        >
-          <h1
-            className="ty-title text-[2.75rem] leading-[1.1] text-white sm:text-[4rem] lg:text-display lg:leading-[1.25]"
-            data-node-id="67:270"
-          >
-            COVID-19 Dashboard
-          </h1>
+    <div className="flex w-full flex-col items-center bg-[var(--color-theme)] gap-10 pt-10 pb-10">
+      <div className="w-full max-w-[1300px] ">
+        <div className="ty-title text-[var(--color-white)]">
+          covid-19 dashboard
         </div>
-
-        <div
-          className="h-px w-full max-w-[992px] bg-white sm:ml-6 lg:ml-[50px]"
-          data-node-id="67:271"
-        />
+        <div className="mt-[18px] h-[3px] w-[75%] bg-[var(--color-white)]" />
       </div>
-    </section>
+      <div className="ty-body w-full max-w-[1200px]  text-[var(--color-white)]">
+        The COVID-19 Impact Dashboard provides a simple, digestible portal
+        into the data on cases and deaths worldwide for the COVID-19 pandemic
+        beginning in January 2020 when the first deaths were reported in
+        China. This dashboard is at the heart of the COVID-19 Impact Project.
+        Beginning with country-level statistics in 2020, it now allows for the
+        disaggregation of data into geographic granularity, revealing local
+        impact and trends.
+      </div>
+    </div>
   )
 }
 
-export default IntroDashboard;
+export default IntroDashboard
