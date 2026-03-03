@@ -1,21 +1,24 @@
-const flagModules = import.meta.glob('../../assets/country-flags/*.svg', {
-  eager: true,
-  import: 'default',
-})
+const publicBaseUrl = import.meta.env.BASE_URL || '/'
 
-const flagUrlByCode = Object.entries(flagModules).reduce((accumulator, [path, url]) => {
-  const fileName = path.split('/').pop()
+function buildFlagUrl(countryCode) {
+  const normalizedBaseUrl = publicBaseUrl.endsWith('/') ? publicBaseUrl : `${publicBaseUrl}/`
+  return `${normalizedBaseUrl}flags/${countryCode}.svg`
+}
 
-  if (!fileName) {
-    return accumulator
+function getSupportedCountryCodes() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const countryCodes = []
+
+  for (const firstCharacter of alphabet) {
+    for (const secondCharacter of alphabet) {
+      countryCodes.push(`${firstCharacter}${secondCharacter}`)
+    }
   }
 
-  const countryCode = fileName.replace('.svg', '')
-  accumulator[countryCode] = url
-  return accumulator
-}, {})
+  return countryCodes
+}
 
-const supportedCountryCodes = Object.keys(flagUrlByCode)
+const supportedCountryCodes = getSupportedCountryCodes()
 
 const countryCodeOverrides = {
   Bolivia: 'BO',
@@ -321,7 +324,7 @@ export function getFlagUrlForRegion(regionName) {
     return null
   }
 
-  return flagUrlByCode[countryCode] ?? null
+  return buildFlagUrl(countryCode)
 }
 
 export function getNationalColorForRegion(regionName) {
