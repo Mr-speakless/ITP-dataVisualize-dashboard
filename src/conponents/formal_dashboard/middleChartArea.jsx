@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ChartViewToggle from './chartConponents/ChartViewToggle.jsx'
 import DataFilterBar from './chartConponents/DataFilterBar.jsx'
+import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import {
   DEFAULT_WORLD_DATE,
@@ -297,6 +298,14 @@ const MiddleChartArea = () => {
               }}
             />
           </div>
+          <SelectedCountryChips
+            countries={selectedCountryRows}
+            onRemove={(countryName) =>
+              setSelectedCountries((currentSelection) =>
+                currentSelection.filter((name) => name !== countryName)
+              )
+            }
+          />
           {chart ? <p>linechart</p> : <p>map chart</p>}
           <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |
