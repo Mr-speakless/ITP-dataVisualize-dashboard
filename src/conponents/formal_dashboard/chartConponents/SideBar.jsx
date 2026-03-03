@@ -8,32 +8,23 @@ import {
   getMetricLabel,
   getSortValue,
 } from '../worldData.js'
-
-const rowAccentColors = [
-  'bg-[#2442f5]',
-  'bg-[#7281f6]',
-  'bg-[#f67272]',
-  'bg-[#f6eb72]',
-  'bg-[#7ed6a2]',
-  'bg-[#5ec3d6]',
-  'bg-[#f0a160]',
-  'bg-[#b97ff7]',
-]
+import { getFlagComponentForRegion, getNationalColorForRegion } from '../countryFlags.js'
 
 const iconClassName =
   'shrink-0 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current'
 
 function CountryRow({
   country,
-  index,
   metric,
   sortMode,
   isSelected,
   onToggle,
 }) {
-  const accentColor = rowAccentColors[index % rowAccentColors.length]
   const value = getSortValue(country, metric, sortMode)
-  const selectionIndicatorClassName = isSelected ? accentColor : 'bg-white'
+  const FlagComponent = getFlagComponentForRegion(country.name)
+  const nationalColor = getNationalColorForRegion(country.name)
+  const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
+  const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
 
   return (
     <button
@@ -45,9 +36,16 @@ function CountryRow({
     >
       <span
         className={`h-[18px] w-[18px] rounded-[5px] border border-medium-grey ${selectionIndicatorClassName}`}
+        style={selectionIndicatorStyle}
         aria-hidden="true"
       />
-      <span className={`h-[18px] w-[29px] shrink-0 ${accentColor}`} aria-hidden="true" />
+      <span className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey-bg" aria-hidden="true">
+        {FlagComponent ? (
+          <FlagComponent title={country.name} className="h-[18px] w-auto" />
+        ) : (
+          <span className="block h-[18px] w-[29px] bg-grey" />
+        )}
+      </span>
       <span className="ty-small truncate text-black">{country.name}</span>
       <span className="ty-small text-right text-black">{formatDashboardNumber(value)}</span>
     </button>
@@ -206,11 +204,10 @@ const SideBar = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="flex flex-col gap-2">
-            {countries.map((country, index) => (
+            {countries.map((country) => (
               <CountryRow
                 key={country.name}
                 country={country}
-                index={index}
                 metric={metric}
                 sortMode={sortMode}
                 isSelected={selectedCountries.includes(country.name)}
