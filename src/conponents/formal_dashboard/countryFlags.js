@@ -1,8 +1,9 @@
 const publicBaseUrl = import.meta.env.BASE_URL || '/'
+const flagAssetVersion = '20260303'
 
 function buildFlagUrl(countryCode) {
   const normalizedBaseUrl = publicBaseUrl.endsWith('/') ? publicBaseUrl : `${publicBaseUrl}/`
-  return `${normalizedBaseUrl}flags/${countryCode}.svg`
+  return `${normalizedBaseUrl}flags/${countryCode}.svg?v=${flagAssetVersion}`
 }
 
 function getSupportedCountryCodes() {
@@ -27,6 +28,7 @@ const countryCodeOverrides = {
   'Congo (Brazzaville)': 'CG',
   'Congo (Kinshasa)': 'CD',
   "Cote d'Ivoire": 'CI',
+  France: 'FR',
   Laos: 'LA',
   Moldova: 'MD',
   Reunion: 'RE',
@@ -43,6 +45,8 @@ const countryCodeOverrides = {
   'Korea, South': 'KR',
   'Korea, North': 'KP',
   Russia: 'RU',
+  Turkey: 'TR',
+  Türkiye: 'TR',
   Venezuela: 'VE',
   Macau: 'MO',
   'Hong Kong': 'HK',

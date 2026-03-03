@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import ascendingIcon from '../../../assets/ascendingIcon.svg?raw'
 import descendingIcon from '../../../assets/descendingIcon.svg?raw'
 import resetDataIcon from '../../../assets/ResetData.svg?raw'
@@ -23,8 +24,13 @@ function CountryRow({
   const value = getSortValue(country, metric, sortMode)
   const flagUrl = getFlagUrlForRegion(country.name)
   const nationalColor = getNationalColorForRegion(country.name)
+  const [hasFlagLoadError, setHasFlagLoadError] = useState(false)
   const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
   const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
+
+  useEffect(() => {
+    setHasFlagLoadError(false)
+  }, [flagUrl])
 
   return (
     <button
@@ -39,14 +45,18 @@ function CountryRow({
         style={selectionIndicatorStyle}
         aria-hidden="true"
       />
-      <span className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey-bg" aria-hidden="true">
-        {flagUrl ? (
+      <span
+        className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey bg-grey"
+        aria-hidden="true"
+      >
+        {flagUrl && !hasFlagLoadError ? (
           <img
             src={flagUrl}
             alt=""
-            className="h-[18px] w-auto"
+            className="h-full w-full object-cover"
             loading="lazy"
             decoding="async"
+            onError={() => setHasFlagLoadError(true)}
           />
         ) : (
           <span className="block h-[18px] w-[29px] bg-grey" />
