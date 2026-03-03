@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getNationalColorForRegion } from './countryFlags.js'
 import ChartViewToggle from './chartConponents/ChartViewToggle.jsx'
+import CountryTrendChart from './chartConponents/CountryTrendChart.jsx'
 import DataFilterBar from './chartConponents/DataFilterBar.jsx'
 import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import {
   DEFAULT_WORLD_DATE,
+  buildCountryTrendSeriesPoints,
+  buildTrendDateRange,
   buildWorldCountryRows,
   buildWorldSummary,
+  fetchWorldRegionSeries,
   fetchWorldDaySnapshot,
   fetchWorldMeta,
   formatDashboardNumber,
@@ -68,9 +73,12 @@ const MiddleChartArea = () => {
   const [sortMode, setSortMode] = useState(initialSortMode)
   const [sortDirection, setSortDirection] = useState(initialSortDirection)
   const [selectedCountries, setSelectedCountries] = useState([])
+  const [countrySeriesByName, setCountrySeriesByName] = useState({})
   const [isMetaLoading, setIsMetaLoading] = useState(true)
   const [isDayLoading, setIsDayLoading] = useState(true)
+  const [isSeriesLoading, setIsSeriesLoading] = useState(false)
   const [error, setError] = useState('')
+  const [seriesError, setSeriesError] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -188,7 +196,7 @@ const MiddleChartArea = () => {
         return available
       }
 
-        return sortCountries(countries, displayMode.metric, sortMode, sortDirection)
+      return sortCountries(countries, displayMode.metric, sortMode, sortDirection)
         .slice(0, 10)
         .map((country) => country.name)
     })
@@ -201,6 +209,89 @@ const MiddleChartArea = () => {
       .map((countryName) => countriesByName.get(countryName))
       .filter(Boolean)
   }, [countries, selectedCountries])
+
+  useEffect(() => {
+    if (!chart || selectedCountryRows.length === 0) {
+      setIsSeriesLoading(false)
+      setSeriesError('')
+      return
+    }
+
+    const missingCountries = selectedCountryRows.filter(
+      (country) => !Array.isArray(countrySeriesByName[country.name])
+    )
+
+    if (missingCountries.length === 0) {
+      setIsSeriesLoading(false)
+      setSeriesError('')
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadCountrySeries() {
+      setIsSeriesLoading(true)
+      setSeriesError('')
+
+      try {
+        const results = await Promise.all(
+          missingCountries.map(async (country) => ({
+            name: country.name,
+            series: await fetchWorldRegionSeries(country.name, controller.signal),
+          }))
+        )
+
+        setCountrySeriesByName((currentSeries) => {
+          const nextSeries = { ...currentSeries }
+
+          results.forEach((result) => {
+            nextSeries[result.name] = result.series
+          })
+
+          return nextSeries
+        })
+      } catch (loadError) {
+        if (loadError.name !== 'AbortError') {
+          setSeriesError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Unknown error while loading country trend series'
+          )
+        }
+      } finally {
+        setIsSeriesLoading(false)
+      }
+    }
+
+    loadCountrySeries()
+
+    return () => controller.abort()
+  }, [chart, countrySeriesByName, selectedCountryRows])
+
+  const trendDates = useMemo(
+    () => buildTrendDateRange(meta, selectedDate),
+    [meta, selectedDate]
+  )
+
+  const trendSeries = useMemo(
+    () =>
+      selectedCountryRows
+        .map((country) => {
+          const rawSeries = countrySeriesByName[country.name]
+
+          if (!Array.isArray(rawSeries)) {
+            return null
+          }
+
+          return {
+            color: getNationalColorForRegion(country.name),
+            name: country.name,
+            points: buildCountryTrendSeriesPoints(country, rawSeries, displayMode, trendDates),
+          }
+        })
+        .filter(Boolean),
+    [countrySeriesByName, displayMode, selectedCountryRows, trendDates]
+  )
 
   const worldSummary = useMemo(
     () => buildWorldSummary(countries, displayMode),
@@ -233,7 +324,9 @@ const MiddleChartArea = () => {
 
   const statusText = isMetaLoading || isDayLoading
     ? 'Loading world data...'
-    : error || `Selected countries -> ${selectedCountriesDebug}`
+    : isSeriesLoading
+      ? 'Loading trend lines...'
+      : error || seriesError || `Selected countries -> ${selectedCountriesDebug}`
 
   return (
     <section className="w-full bg-white py-8 sm:py-10">
@@ -306,7 +399,17 @@ const MiddleChartArea = () => {
               )
             }
           />
-          {chart ? <p>linechart</p> : <p>map chart</p>}
+          {chart ? (
+            <CountryTrendChart
+              series={trendSeries}
+              dates={trendDates}
+              displayMode={displayMode}
+              isLoading={isSeriesLoading}
+              error={error || seriesError}
+            />
+          ) : (
+            <p>map chart</p>
+          )}
           <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |
             scale={displayMode.scale} | sortMode={sortMode} |

@@ -71,6 +71,23 @@ export async function fetchWorldDaySnapshot(date, signal) {
   return fetchWorldJson(`c_days/${date}.json`, signal)
 }
 
+export function normalizeWorldRegionPathName(regionName) {
+  return String(regionName ?? '')
+    .trim()
+    .replace(/ /g, '_')
+    .replace(/,/g, '')
+}
+
+export async function fetchWorldRegionSeries(regionName, signal) {
+  const normalizedRegionName = normalizeWorldRegionPathName(regionName)
+
+  if (!normalizedRegionName) {
+    return []
+  }
+
+  return fetchWorldJson(`c_series/${normalizedRegionName}.json`, signal)
+}
+
 export function isDateAvailable(meta, date) {
   return Boolean(meta?.c_dates?.includes(date))
 }
@@ -114,6 +131,75 @@ export function buildWorldCountryRows(meta, dayItems) {
         cases: computePer100k(dailyCases, population),
         deaths: computePer100k(dailyDeaths, population),
       },
+    }
+  })
+}
+
+export function buildTrendDateRange(meta, selectedDate) {
+  const dates = Array.isArray(meta?.c_dates) ? meta.c_dates : []
+
+  if (!selectedDate) {
+    return dates
+  }
+
+  return dates.filter((date) => date <= selectedDate)
+}
+
+export function buildCountryTrendSeriesPoints(country, seriesItems, displayMode, dates) {
+  if (!country || !Array.isArray(dates) || dates.length === 0) {
+    return []
+  }
+
+  const population = country.population ?? 0
+  const items = Array.isArray(seriesItems) ? seriesItems : []
+  const itemsByDate = items.reduce((accumulator, item) => {
+    if (item?.on) {
+      accumulator[item.on] = item
+    }
+
+    return accumulator
+  }, {})
+
+  let previousTotalCases = 0
+  let previousTotalDeaths = 0
+
+  return dates.map((date, index) => {
+    const item = itemsByDate[date]
+    const totalCases = Number(item?.Cases ?? previousTotalCases)
+    const totalDeaths = Number(item?.Deaths ?? previousTotalDeaths)
+
+    // Some historical corrections can create negative daily diffs.
+    // Clamp them to zero so the chart stays legible for "On Day" mode.
+    const dailyCases = Math.max(0, totalCases - previousTotalCases)
+    const dailyDeaths = Math.max(0, totalDeaths - previousTotalDeaths)
+
+    const point = {
+      index,
+      date,
+      totals: {
+        cases: totalCases,
+        deaths: totalDeaths,
+      },
+      daily: {
+        cases: dailyCases,
+        deaths: dailyDeaths,
+      },
+      per100kTotals: {
+        cases: computePer100k(totalCases, population),
+        deaths: computePer100k(totalDeaths, population),
+      },
+      per100kDaily: {
+        cases: computePer100k(dailyCases, population),
+        deaths: computePer100k(dailyDeaths, population),
+      },
+    }
+
+    previousTotalCases = totalCases
+    previousTotalDeaths = totalDeaths
+
+    return {
+      ...point,
+      value: getDisplayValue(point, displayMode),
     }
   })
 }
