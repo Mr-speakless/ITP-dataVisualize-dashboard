@@ -3,6 +3,7 @@ import {
   formatDashboardNumber,
   getTimeModeLabel,
 } from '../worldData.js'
+
 const chartWidth = 1100
 const chartHeight = 420
 const chartMargin = {
@@ -12,6 +13,7 @@ const chartMargin = {
   left: 82,
 }
 const gridSegments = 10
+const yAxisStepMultipliers = [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -25,17 +27,12 @@ function getNiceStep(roughStep) {
   const exponent = Math.floor(Math.log10(roughStep))
   const base = 10 ** exponent
   const normalized = roughStep / base
+  const matchingMultiplier = yAxisStepMultipliers.find(
+    (multiplier) => normalized <= multiplier
+  )
 
-  if (normalized <= 1) {
-    return base
-  }
-
-  if (normalized <= 2) {
-    return 2 * base
-  }
-
-  if (normalized <= 5) {
-    return 5 * base
+  if (matchingMultiplier) {
+    return matchingMultiplier * base
   }
 
   return 10 * base
@@ -282,11 +279,11 @@ export default function CountryTrendChart({
                 id={gradientId}
                 x1="0"
                 y1="0"
-                x2="0"
+                x2="1"
                 y2="1"
               >
-                <stop offset="0%" stopColor={item.color} stopOpacity="0.18" />
-                <stop offset="55%" stopColor={item.color} stopOpacity="0.08" />
+                <stop offset="0%" stopColor={item.color} stopOpacity="0.22" />
+                <stop offset="60%" stopColor={item.color} stopOpacity="0.08" />
                 <stop offset="100%" stopColor={item.color} stopOpacity="0" />
               </linearGradient>
             )
@@ -376,11 +373,12 @@ export default function CountryTrendChart({
 
         {plottedSeries.map((item) => {
           const gradientId = `country-trend-gradient-${sanitizeId(item.name)}`
+          const chartBottomY = chartMargin.top + innerHeight
 
           return (
             <g key={item.name}>
               <path
-                d={buildAreaPath(item.points, chartMargin.top + innerHeight)}
+                d={buildAreaPath(item.points, chartBottomY)}
                 fill={`url(#${gradientId})`}
               />
               <path
