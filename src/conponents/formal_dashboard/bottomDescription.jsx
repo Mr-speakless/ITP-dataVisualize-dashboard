@@ -6,9 +6,12 @@ const contentBlocks = [
     {
         title: 'Libraries',
         items: [
-            { label: 'React.js', href: 'https://reactjs.org/' },
-            { label: 'React Semantic UI', href: 'https://react.semantic-ui.com/' },
-            { label: 'Victory', href: 'https://formidable.com/open-source/victory/' },
+            { label: 'React.js', href: 'https://react.dev/' },
+            { label: 'Vite', href: 'https://vite.dev/' },
+            { label: 'Tailwindcss', href: 'https://tailwindcss.com/' },
+            { label: 'Country-flag-icons', href: 'https://github.com/catamphetamine/country-flag-icons' },
+            { label: 'Google icon', href: 'https://fonts.google.com/icons' },
+            { label: 'World map svg', href: 'https://simplemaps.com/resources/svg-world' },
         ],
     },
     {
@@ -17,8 +20,7 @@ const contentBlocks = [
             'Github',
             'Visual Studio Code',
             'nodejs',
-            { label: 'Create React App', href: 'https://github.com/facebook/create-react-app' },
-            { label: 'Docusaurus 2', href: 'https://v2.docusaurus.io/' },
+            { label: 'Create React App', href: 'https://github.com/facebook/create-react-app' }
         ],
     },
     {
@@ -40,22 +42,29 @@ const contentBlocks = [
             },
         ],
     },
+    {
+        title: 'Developed By',
+        items: ['John Henry Thompson', 'Shindy Johnson', 'Shouyue(Luas) Wu'],
+    }
 ];
 
-function DescriptionItem({ item }) {
+function DescriptionItem({ item, hasTrailingComma }) {
     if (typeof item === 'string') {
-        return <p>{item}</p>;
+        return <p>{item}{hasTrailingComma ? ',' : ''}</p>;
     }
 
     return (
-        <a
-            className="underline decoration-transparent transition-colors duration-150 hover:decoration-white/70"
-            href={item.href}
-            target="_blank"
-            rel="noreferrer"
-        >
-            {item.label}
-        </a>
+        <p>
+            <a
+                className="underline decoration-transparent transition-colors duration-150 hover:decoration-white/70"
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+            >
+                {item.label}
+            </a>
+            {hasTrailingComma ? ',' : ''}
+        </p>
     );
 }
 
@@ -89,12 +98,13 @@ const BottomDescription = () => {
                             className={index >= 3 ? 'lg:col-span-2' : ''}
                             data-node-id={`67:${441 + index}`}
                         >
-                            <p>{block.title}</p>
+                            <p className="font-bold">{block.title}</p>
                             <div className="mt-0 space-y-0">
-                                {block.items.map((item) => (
+                                {block.items.map((item, itemIndex) => (
                                     <DescriptionItem
                                         key={typeof item === 'string' ? item : item.label}
                                         item={item}
+                                        hasTrailingComma={itemIndex < block.items.length - 1}
                                     />
                                 ))}
                             </div>
