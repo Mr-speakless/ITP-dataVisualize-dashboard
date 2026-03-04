@@ -10,7 +10,6 @@ import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFl
 
 const heatScaleColors = ['#eaf6fb', '#c4e0ed', '#87bfd4', '#3a88a8', '#0b4662']
 const noDataFillColor = '#dde7ec'
-const legendLogCeilMultipliers = [1, 2, 5, 10]
 const mapSvgClassName = 'world-projection-map-svg'
 const preparedWorldMapSvg = worldMapSvg
   .replace(/<\?xml[\s\S]*?\?>/i, '')
@@ -30,43 +29,43 @@ const mapNameAliases = {
 const scalePresetByModeKey = {
   'cases-to-date-total': {
     label: 'Cases / To Date / Total',
-    description: 'Cumulative totals use logarithmic bins to handle the long global tail.',
-    strategy: 'geometric',
+    description: 'Cumulative totals use fixed bins so the color scale stays stable across dates.',
+    upperBounds: [100000, 1000000, 10000000, 50000000, 200000000],
   },
   'deaths-to-date-total': {
     label: 'Deaths / To Date / Total',
-    description: 'Cumulative totals use logarithmic bins to separate high-mortality countries.',
-    strategy: 'geometric',
+    description: 'Cumulative deaths use fixed bins so the color scale stays stable across dates.',
+    upperBounds: [1000, 10000, 100000, 500000, 2000000],
   },
   'cases-on-day-total': {
     label: 'Cases / On Day / Total',
-    description: 'Daily totals use quantile bins so short spikes stay readable on the map.',
-    strategy: 'quantile',
+    description: 'Daily totals use fixed bins so short-term comparisons stay consistent.',
+    upperBounds: [100, 1000, 5000, 20000, 100000],
   },
   'deaths-on-day-total': {
     label: 'Deaths / On Day / Total',
-    description: 'Daily deaths use quantile bins to avoid a few outliers flattening the rest.',
-    strategy: 'quantile',
+    description: 'Daily deaths use fixed bins so short-term comparisons stay consistent.',
+    upperBounds: [10, 100, 500, 2000, 10000],
   },
   'cases-to-date-per-100k': {
     label: 'Cases / To Date / Per 100k',
-    description: 'Population-adjusted cumulative values use quantile bins across current regions.',
-    strategy: 'quantile',
+    description: 'Population-adjusted cumulative values use fixed bins across all dates.',
+    upperBounds: [1000, 5000, 10000, 20000, 40000],
   },
   'deaths-to-date-per-100k': {
     label: 'Deaths / To Date / Per 100k',
-    description: 'Population-adjusted cumulative mortality uses quantile bins across current regions.',
-    strategy: 'quantile',
+    description: 'Population-adjusted cumulative mortality uses fixed bins across all dates.',
+    upperBounds: [10, 50, 100, 250, 500],
   },
   'cases-on-day-per-100k': {
     label: 'Cases / On Day / Per 100k',
-    description: 'Daily population-adjusted cases use quantile bins to keep local surges visible.',
-    strategy: 'quantile',
+    description: 'Daily population-adjusted cases use fixed bins across all dates.',
+    upperBounds: [1, 5, 10, 25, 50],
   },
   'deaths-on-day-per-100k': {
     label: 'Deaths / On Day / Per 100k',
-    description: 'Daily population-adjusted deaths use quantile bins to keep small-rate changes visible.',
-    strategy: 'quantile',
+    description: 'Daily population-adjusted deaths use fixed bins across all dates.',
+    upperBounds: [0.1, 0.5, 1, 2.5, 5],
   },
 }
 
@@ -179,10 +178,31 @@ function formatLegendValue(value, scale) {
   const normalizedValue = Number.isFinite(value) ? value : 0
 
   if (scale === 'per-100k') {
+    if (normalizedValue > 0 && normalizedValue < 10) {
+      return new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }).format(normalizedValue)
+    }
+
     return new Intl.NumberFormat('en-US', {
       maximumFractionDigits: normalizedValue < 1 ? 2 : 1,
       minimumFractionDigits: normalizedValue < 1 && normalizedValue > 0 ? 2 : 0,
     }).format(normalizedValue)
+  }
+
+  if (Math.abs(normalizedValue) >= 1000000) {
+    return `${new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: normalizedValue >= 10000000 ? 0 : 1,
+      minimumFractionDigits: 0,
+    }).format(normalizedValue / 1000000)}M`
+  }
+
+  if (Math.abs(normalizedValue) >= 1000) {
+    return `${new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: normalizedValue >= 100000 ? 0 : 1,
+      minimumFractionDigits: 0,
+    }).format(normalizedValue / 1000)}K`
   }
 
   if (normalizedValue < 10 && normalizedValue > 0 && !Number.isInteger(normalizedValue)) {
@@ -195,72 +215,23 @@ function formatLegendValue(value, scale) {
   return formatDashboardNumber(normalizedValue)
 }
 
-function buildQuantileUpperBounds(values, levelCount) {
-  return Array.from({ length: levelCount }, (_, index) => {
-    const quantileIndex = Math.min(
-      values.length - 1,
-      Math.ceil(((index + 1) * values.length) / levelCount) - 1
-    )
-
-    return values[Math.max(quantileIndex, 0)]
-  })
-}
-
-function buildGeometricUpperBounds(values, levelCount) {
-  const minValue = Math.max(values[0], Number.EPSILON)
-  const maxValue = values[values.length - 1]
-
-  if (minValue === maxValue) {
-    return Array.from({ length: levelCount }, () => maxValue)
-  }
-
-  return Array.from({ length: levelCount }, (_, index) => {
-    if (index === levelCount - 1) {
-      return maxValue
-    }
-
-    const ratio = (index + 1) / levelCount
-    return minValue * (maxValue / minValue) ** ratio
-  })
-}
-
 function buildLegendScale(countries, displayMode) {
   const modeKey = buildDisplayModeKey(displayMode)
   const preset = scalePresetByModeKey[modeKey] ?? scalePresetByModeKey['cases-to-date-total']
-  const positiveValues = countries
-    .map((country) => getDisplayValue(country, displayMode))
-    .filter((value) => value > 0)
-    .sort((left, right) => left - right)
-
-  if (positiveValues.length === 0) {
-    return {
-      preset,
-      levels: heatScaleColors.map((color, index) => ({
-        color,
-        index,
-        upperBound: 0,
-        label: 'No values',
-      })),
-      getLevelIndex: () => -1,
-    }
-  }
-
   const upperBounds =
-    preset.strategy === 'geometric'
-      ? buildGeometricUpperBounds(positiveValues, heatScaleColors.length)
-      : buildQuantileUpperBounds(positiveValues, heatScaleColors.length)
+    Array.isArray(preset.upperBounds) && preset.upperBounds.length === heatScaleColors.length
+      ? preset.upperBounds
+      : scalePresetByModeKey['cases-to-date-total'].upperBounds
 
   const levels = upperBounds.map((upperBound, index) => ({
     color: heatScaleColors[index],
     index,
     upperBound,
-    label:
+    lowerLabel:
       index === 0
-        ? `> 0 - ${formatLegendValue(upperBound, displayMode?.scale)}`
-        : `${formatLegendValue(upperBounds[index - 1], displayMode?.scale)} - ${formatLegendValue(
-          upperBound,
-          displayMode?.scale
-        )}`,
+        ? '0'
+        : formatLegendValue(upperBounds[index - 1], displayMode?.scale),
+    upperLabel: formatLegendValue(upperBound, displayMode?.scale),
   }))
 
   return {
@@ -496,7 +467,7 @@ export default function WorldProjectionMap({
                 className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-black/10"
                 style={{ backgroundColor: noDataFillColor }}
               />
-              <span className="ty-small text-dark-grey">No data / 0</span>
+              <span className="ty-small text-dark-grey">No data</span>
             </div>
             {legendScale.levels.map((level) => (
               <div key={`legend-level-${level.index}`} className="flex items-center gap-2">
@@ -504,7 +475,11 @@ export default function WorldProjectionMap({
                   className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-black/10"
                   style={{ backgroundColor: level.color }}
                 />
-                <span className="ty-small text-dark-grey">{level.label}</span>
+                <span className="ty-small flex items-center text-dark-grey">
+                  <span className="inline-block min-w-[4.5ch] text-left">{level.lowerLabel}</span>
+                  <span className="inline-block min-w-[2.5ch] text-center"> - </span>
+                  <span className="inline-block min-w-[4.5ch] text-left">{level.upperLabel}</span>
+                </span>
               </div>
             ))}
           </div>

@@ -10,5 +10,5 @@ export default defineConfig({
       usePolling: true,
     },
   },
-  // base: '/ITP-dataVisualize-dashboard/'
+  base: '/ITP-dataVisualize-dashboard/'
 })
