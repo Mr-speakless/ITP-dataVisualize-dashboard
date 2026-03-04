@@ -145,6 +145,7 @@ export default function CountryTrendChart({
   displayMode,
   isLoading = false,
   error = '',
+  highlightedCountryName = '',
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [hoveredPointer, setHoveredPointer] = useState(null)
@@ -182,6 +183,15 @@ export default function CountryTrendChart({
       }
     })
   }, [dates.length, innerHeight, innerWidth, series, yAxis.max])
+
+  const hasHighlightedSeries = useMemo(
+    () =>
+      Boolean(
+        highlightedCountryName &&
+          plottedSeries.some((item) => item.name === highlightedCountryName)
+      ),
+    [highlightedCountryName, plottedSeries]
+  )
 
   const hoveredDate = hoveredIndex == null ? '' : dates[hoveredIndex] ?? ''
   const hoveredX =
@@ -278,13 +288,13 @@ export default function CountryTrendChart({
                 key={gradientId}
                 id={gradientId}
                 x1="0"
-                y1="0"
+                y1="0.1"
                 x2="1"
                 y2="1"
               >
-                <stop offset="0%" stopColor={item.color} stopOpacity="0.22" />
-                <stop offset="60%" stopColor={item.color} stopOpacity="0.08" />
-                <stop offset="100%" stopColor={item.color} stopOpacity="0" />
+                <stop offset="0%" stopColor={item.color} stopOpacity="0.3" />
+                <stop offset="30%" stopColor={item.color} stopOpacity="0.2" />
+                <stop offset="60%" stopColor={item.color} stopOpacity="0" />
               </linearGradient>
             )
           })}
@@ -374,19 +384,22 @@ export default function CountryTrendChart({
         {plottedSeries.map((item) => {
           const gradientId = `country-trend-gradient-${sanitizeId(item.name)}`
           const chartBottomY = chartMargin.top + innerHeight
+          const isHighlighted = item.name === highlightedCountryName
+          const isDimmed = hasHighlightedSeries && !isHighlighted
 
           return (
             <g key={item.name}>
               <path
                 d={buildAreaPath(item.points, chartBottomY)}
                 fill={`url(#${gradientId})`}
+                fillOpacity={isDimmed ? '0.14' : isHighlighted ? '0.9' : '1'}
               />
               <path
                 d={buildLinePath(item.points)}
                 fill="none"
                 stroke={item.color}
-                strokeOpacity="0.6"
-                strokeWidth="1.5"
+                strokeOpacity={isDimmed ? '0.18' : isHighlighted ? '1' : '0.6'}
+                strokeWidth={isHighlighted ? '3.2' : '1.5'}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />

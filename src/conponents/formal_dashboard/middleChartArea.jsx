@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getNationalColorForRegion } from './countryFlags.js'
 import ChartViewToggle from './chartConponents/ChartViewToggle.jsx'
 import CountryTrendChart from './chartConponents/CountryTrendChart.jsx'
@@ -6,6 +6,7 @@ import DataFilterBar from './chartConponents/DataFilterBar.jsx'
 import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
 import TimeProgressBar from './chartConponents/TimeProgressBar.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
+import WorldProjectionMap from './chartConponents/WorldProjectionMap.jsx'
 import {
   DEFAULT_WORLD_DATE,
   buildCountryTrendSeriesPoints,
@@ -69,6 +70,7 @@ const MiddleChartArea = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [meta, setMeta] = useState(null)
   const [countries, setCountries] = useState([])
+  const [loadedSelectedDate, setLoadedSelectedDate] = useState('')
   const [selectedDate, setSelectedDate] = useState(DEFAULT_WORLD_DATE)
   const [timelineStartDate, setTimelineStartDate] = useState('')
   const [timelineDate, setTimelineDate] = useState(DEFAULT_WORLD_DATE)
@@ -76,12 +78,17 @@ const MiddleChartArea = () => {
   const [sortMode, setSortMode] = useState(initialSortMode)
   const [sortDirection, setSortDirection] = useState(initialSortDirection)
   const [selectedCountries, setSelectedCountries] = useState([])
+  const [hoveredCountryName, setHoveredCountryName] = useState('')
   const [countrySeriesByName, setCountrySeriesByName] = useState({})
+  const [worldSnapshotByDate, setWorldSnapshotByDate] = useState({})
+  const [displayedMapCountries, setDisplayedMapCountries] = useState([])
+  const [displayedMapDate, setDisplayedMapDate] = useState('')
   const [isMetaLoading, setIsMetaLoading] = useState(true)
   const [isDayLoading, setIsDayLoading] = useState(true)
   const [isSeriesLoading, setIsSeriesLoading] = useState(false)
   const [error, setError] = useState('')
   const [seriesError, setSeriesError] = useState('')
+  const pendingMapDatesRef = useRef(new Set())
 
   useEffect(() => {
     const controller = new AbortController()
@@ -136,7 +143,14 @@ const MiddleChartArea = () => {
 
       try {
         const daySnapshot = await fetchWorldDaySnapshot(selectedDate, controller.signal)
-        setCountries(buildWorldCountryRows(meta, daySnapshot))
+        const countryRows = buildWorldCountryRows(meta, daySnapshot)
+
+        setCountries(countryRows)
+        setLoadedSelectedDate(selectedDate)
+        setWorldSnapshotByDate((currentSnapshots) => ({
+          ...currentSnapshots,
+          [selectedDate]: countryRows,
+        }))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
           setError(
@@ -155,6 +169,51 @@ const MiddleChartArea = () => {
 
     return () => controller.abort()
   }, [meta, selectedDate])
+
+  useEffect(() => {
+    if (chart || !meta || !timelineDate || timelineDate === selectedDate) {
+      return
+    }
+
+    if (!isDateAvailable(meta, timelineDate)) {
+      return
+    }
+
+    if (
+      Array.isArray(worldSnapshotByDate[timelineDate]) ||
+      pendingMapDatesRef.current.has(timelineDate)
+    ) {
+      return
+    }
+
+    pendingMapDatesRef.current.add(timelineDate)
+
+    fetchWorldDaySnapshot(timelineDate)
+      .then((daySnapshot) => {
+        const countryRows = buildWorldCountryRows(meta, daySnapshot)
+
+        setWorldSnapshotByDate((currentSnapshots) => {
+          if (Array.isArray(currentSnapshots[timelineDate])) {
+            return currentSnapshots
+          }
+
+          return {
+            ...currentSnapshots,
+            [timelineDate]: countryRows,
+          }
+        })
+      })
+      .catch((loadError) => {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Unknown error while loading the map snapshot'
+        )
+      })
+      .finally(() => {
+        pendingMapDatesRef.current.delete(timelineDate)
+      })
+  }, [chart, meta, timelineDate, selectedDate, worldSnapshotByDate])
 
   useEffect(() => {
     if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0) {
@@ -267,6 +326,55 @@ const MiddleChartArea = () => {
       .filter(Boolean)
   }, [countries, selectedCountries])
 
+  const requestedMapCountries = useMemo(() => {
+    if (timelineDate === selectedDate && loadedSelectedDate === selectedDate) {
+      return countries
+    }
+
+    return worldSnapshotByDate[timelineDate] ?? null
+  }, [countries, loadedSelectedDate, selectedDate, timelineDate, worldSnapshotByDate])
+
+  useEffect(() => {
+    if (chart || !Array.isArray(requestedMapCountries) || requestedMapCountries.length === 0) {
+      return
+    }
+
+    setDisplayedMapCountries(requestedMapCountries)
+    setDisplayedMapDate(timelineDate)
+  }, [chart, requestedMapCountries, timelineDate])
+
+  const mapCountries = useMemo(() => {
+    if (chart) {
+      return countries
+    }
+
+    if (Array.isArray(requestedMapCountries)) {
+      return requestedMapCountries
+    }
+
+    return displayedMapCountries
+  }, [chart, countries, displayedMapCountries, requestedMapCountries])
+
+  const mapDisplayDate = useMemo(() => {
+    if (chart) {
+      return selectedDate
+    }
+
+    return Array.isArray(requestedMapCountries)
+      ? timelineDate
+      : displayedMapDate || timelineDate
+  }, [chart, displayedMapDate, requestedMapCountries, selectedDate, timelineDate])
+
+  const isMapSnapshotLoading = useMemo(
+    () =>
+      !chart &&
+      Boolean(meta) &&
+      Boolean(timelineDate) &&
+      timelineDate !== selectedDate &&
+      !Array.isArray(worldSnapshotByDate[timelineDate]),
+    [chart, meta, selectedDate, timelineDate, worldSnapshotByDate]
+  )
+
   useEffect(() => {
     if (!chart || selectedCountryRows.length === 0) {
       setIsSeriesLoading(false)
@@ -363,6 +471,8 @@ const MiddleChartArea = () => {
     ? 'Loading world data...'
     : isSeriesLoading
       ? 'Loading trend lines...'
+      : isMapSnapshotLoading
+        ? 'Loading projection map...'
       : error || seriesError || `Selected countries -> ${selectedCountriesDebug}`
 
   return (
@@ -449,9 +559,25 @@ const MiddleChartArea = () => {
               displayMode={displayMode}
               isLoading={isSeriesLoading}
               error={error || seriesError}
+              highlightedCountryName={hoveredCountryName}
             />
           ) : (
-            <p>map chart - current timeline date {timelineDate}</p>
+            <WorldProjectionMap
+              countries={mapCountries}
+              displayMode={displayMode}
+              selectedCountries={selectedCountries}
+              timelineDate={mapDisplayDate}
+              isLoading={isDayLoading && mapCountries.length === 0}
+              isUpdating={isMapSnapshotLoading}
+              error={error}
+              hoveredCountryName={hoveredCountryName}
+              onHoverCountryChange={setHoveredCountryName}
+              onToggleCountry={(countryName) =>
+                setSelectedCountries((currentSelection) =>
+                  toggleCountrySelection(currentSelection, countryName)
+                )
+              }
+            />
           )}
           <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |

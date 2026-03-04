@@ -2,10 +2,10 @@ const IntroDashboard = () => {
   return (
     <div className="flex w-full flex-col items-center bg-[var(--color-theme)] gap-10 pt-10 pb-10">
       <div className="w-full max-w-[1300px] ">
-        <div className="ty-title text-[var(--color-white)] pl-[50px] mb-[50px]">
+        <div className="ty-title text-[var(--color-white)] pl-[50px] ">
           covid-19 dashboard
         </div>
-        <div className="mt-[18px] h-[3px] w-[75%] bg-[var(--color-white)]" />
+        <div className="mt-[18px] h-[3px] w-[75%] bg-[var(--color-white)] mb-[50px]" />
       </div>
       <div className="ty-body w-full max-w-[1200px]  text-[var(--color-white)]">
         The COVID-19 Impact Dashboard provides a simple, digestible portal
