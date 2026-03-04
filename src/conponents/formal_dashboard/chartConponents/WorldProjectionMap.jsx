@@ -178,7 +178,7 @@ function formatLegendValue(value, scale) {
   const normalizedValue = Number.isFinite(value) ? value : 0
 
   if (scale === 'per-100k') {
-    if (normalizedValue > 0 && normalizedValue < 10) {
+    if (normalizedValue > 0 && normalizedValue < 99) {
       return new Intl.NumberFormat('en-US', {
         maximumFractionDigits: 2,
         minimumFractionDigits: 2,
