@@ -11,6 +11,7 @@ import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFl
 const heatScaleColors = ['#eaf6fb', '#c4e0ed', '#87bfd4', '#3a88a8', '#0b4662']
 const noDataFillColor = '#dde7ec'
 const legendLogCeilMultipliers = [1, 2, 5, 10]
+const mapSvgClassName = 'world-projection-map-svg'
 const preparedWorldMapSvg = worldMapSvg
   .replace(/<\?xml[\s\S]*?\?>/i, '')
   .replace(/<!--[\s\S]*?-->/g, '')
@@ -170,9 +171,8 @@ function buildSelectedCodeSet(selectedCountries) {
 }
 
 function buildDisplayModeKey(displayMode) {
-  return `${displayMode?.metric ?? 'cases'}-${displayMode?.timeMode ?? 'to-date'}-${
-    displayMode?.scale ?? 'total'
-  }`
+  return `${displayMode?.metric ?? 'cases'}-${displayMode?.timeMode ?? 'to-date'}-${displayMode?.scale ?? 'total'
+    }`
 }
 
 function formatLegendValue(value, scale) {
@@ -258,9 +258,9 @@ function buildLegendScale(countries, displayMode) {
       index === 0
         ? `> 0 - ${formatLegendValue(upperBound, displayMode?.scale)}`
         : `${formatLegendValue(upperBounds[index - 1], displayMode?.scale)} - ${formatLegendValue(
-            upperBound,
-            displayMode?.scale
-          )}`,
+          upperBound,
+          displayMode?.scale
+        )}`,
   }))
 
   return {
@@ -281,18 +281,18 @@ function buildCountrySelectors(countryCode, countryName) {
   const selectors = new Set([`path[id="${escapeAttributeValue(countryCode)}"]`])
   const mapName = mapIncludedCountry[countryCode]
 
-  ;[countryName, mapName].filter(Boolean).forEach((name) => {
-    const escapedName = escapeAttributeValue(name)
-    selectors.add(`path[name="${escapedName}"]`)
-    selectors.add(`path[class="${escapedName}"]`)
-  })
+    ;[countryName, mapName].filter(Boolean).forEach((name) => {
+      const escapedName = escapeAttributeValue(name)
+      selectors.add(`path[name="${escapedName}"]`)
+      selectors.add(`path[class="${escapedName}"]`)
+    })
 
   return [...selectors]
 }
 
 function buildStyledWorldMapSvg(countryByCode, selectedCountryCodes, hoveredCountryCode, legendScale, displayMode) {
   const rules = [
-    `path { fill: ${noDataFillColor}; stroke: #aeb8be; stroke-width: 0.45; opacity: 0.42; cursor: default; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
+    `.${mapSvgClassName} path { fill: ${noDataFillColor}; stroke: #aeb8be; stroke-width: 0.45; opacity: 0.42; cursor: default; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
   ]
 
   Object.entries(countryByCode).forEach(([countryCode, country]) => {
@@ -310,13 +310,15 @@ function buildStyledWorldMapSvg(countryByCode, selectedCountryCodes, hoveredCoun
     const filter = isHovered ? 'drop-shadow(0 0 8px rgba(0,0,0,0.24))' : 'none'
 
     rules.push(
-      `${selectors.join(', ')} { fill: ${fillColor}; stroke: ${strokeColor}; stroke-width: ${strokeWidth}; opacity: ${opacity}; cursor: ${cursor}; filter: ${filter}; }`
+      `${selectors
+        .map((selector) => `.${mapSvgClassName} ${selector}`)
+        .join(', ')} { fill: ${fillColor}; stroke: ${strokeColor}; stroke-width: ${strokeWidth}; opacity: ${opacity}; cursor: ${cursor}; filter: ${filter}; }`
     )
   })
 
   return preparedWorldMapSvg.replace(
     /<svg\b([^>]*)>/i,
-    `<svg$1><style>${rules.join('\n')}</style>`
+    `<svg$1 class="${mapSvgClassName}"><style>${rules.join('\n')}</style>`
   )
 }
 
@@ -413,8 +415,9 @@ export default function WorldProjectionMap({
   }
 
   return (
-    <div className="relative flex w-full flex-col gap-4 rounded-[14px] border border-grey bg-grey-bg p-4">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+    <>
+    {/* <div className="relative flex w-full flex-col gap-4 rounded-[14px] border border-grey bg-grey-bg p-4"> */}
+      {/* <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-1">
           <div className="ty-small text-black">{legendScale.preset.label}</div>
           <div className="ty-small text-dark-grey">
@@ -427,11 +430,11 @@ export default function WorldProjectionMap({
             ? 'Fetching next frame...'
             : 'Map is up to date.'}
         </div>
-      </div>
+      </div> */}
 
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-[10px] bg-[#dfe7ec] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
+        className="relative w-full overflow-hidden rounded-[4px] bg-[#dfe7ec] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
         aria-label="World projection map"
         onPointerLeave={() => {
           setHoveredCountryCode(null)
@@ -481,60 +484,57 @@ export default function WorldProjectionMap({
             onToggleCountry?.(country.name)
           }
         }}
-        dangerouslySetInnerHTML={{ __html: styledWorldMapSvg }}
-      />
+      >
+        <div dangerouslySetInnerHTML={{ __html: styledWorldMapSvg }} />
 
-      <div className="rounded-[10px] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(0,0,0,0.06)]">
-        <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="ty-small text-black">Color Legend</div>
-          <div className="ty-small text-dark-grey">{legendScale.preset.description}</div>
-        </div>
-        <div className="grid gap-2 md:grid-cols-6">
-          <div className="flex items-center gap-3 rounded-[8px] border border-grey bg-grey-bg px-3 py-2">
-            <span className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: noDataFillColor }} />
-            <span className="ty-small text-dark-grey">No data / 0</span>
-          </div>
-          {legendScale.levels.map((level) => (
-            <div
-              key={`legend-level-${level.index}`}
-              className="flex items-center gap-3 rounded-[8px] border border-grey bg-grey-bg px-3 py-2"
-            >
-              <span className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: level.color }} />
-              <span className="ty-small text-dark-grey">{level.label}</span>
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 w-[min(240px,calc(100%-2rem))] rounded-[10px] border border-white/60 bg-[rgba(255,255,255,0.3)] px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur-[6px]">
+          
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span
+                className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-black/10"
+                style={{ backgroundColor: noDataFillColor }}
+              />
+              <span className="ty-small text-dark-grey">No data / 0</span>
             </div>
-          ))}
+            {legendScale.levels.map((level) => (
+              <div key={`legend-level-${level.index}`} className="flex items-center gap-2">
+                <span
+                  className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-black/10"
+                  style={{ backgroundColor: level.color }}
+                />
+                <span className="ty-small text-dark-grey">{level.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {hoveredCountry && hoveredPointer ? (
-        <div
-          className="pointer-events-none absolute z-20 w-[286px] rounded-[10px] bg-[rgba(217,217,217,0.78)] px-[22px] py-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[1px]"
-          style={{
-            left: `${clamp(hoveredPointer.x + 12, 12, tooltipMaxLeft)}px`,
-            top: `${Math.max(hoveredPointer.y + 12, 48)}px`,
-          }}
-        >
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <span className="ty-h2 text-white">
-              {String(timelineDate ?? '').replace(/-/g, '/')}
-            </span>
-            <span className="ty-h2 text-white">{buildDisplayModeLabel(displayMode)}</span>
+        {hoveredCountry && hoveredPointer ? (
+          <div
+            className="pointer-events-none absolute z-20  rounded-[10px] shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[5px]"
+            style={{
+              left: `${clamp(hoveredPointer.x + 12, 12, tooltipMaxLeft)}px`,
+              top: `${Math.max(hoveredPointer.y + 12, 48)}px`,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 px-5 py-1.5">
+              <span className="ty-text text-black">
+                {String(timelineDate ?? '').replace(/-/g, '/')}
+              </span>
+              <span className="ty-text text-black">{buildDisplayModeLabel(displayMode)}</span>
+            </div>
+            <div className="flex items-center gap-2 px-5 py-1.5">
+              <span className="ty-text min-w-0 flex-1 truncate text-black">
+                {hoveredCountry.name}
+              </span>
+              <span className="ty-text shrink-0 text-black">
+                {formatDashboardNumber(getDisplayValue(hoveredCountry, displayMode))}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-5">
-            <span
-              className="h-[26px] w-[26px] shrink-0"
-              style={{ backgroundColor: getNationalColorForRegion(hoveredCountry.name) }}
-              aria-hidden="true"
-            />
-            <span className="ty-h2 min-w-0 flex-1 truncate text-white">
-              {hoveredCountry.name}
-            </span>
-            <span className="ty-h2 shrink-0 text-white">
-              {formatDashboardNumber(getDisplayValue(hoveredCountry, displayMode))}
-            </span>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </>
   )
 }

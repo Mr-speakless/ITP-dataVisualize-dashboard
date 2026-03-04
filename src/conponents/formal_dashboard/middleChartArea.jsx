@@ -579,13 +579,13 @@ const MiddleChartArea = () => {
               }
             />
           )}
-          <p className="ty-small text-dark-grey">
+          {/* <p className="ty-small text-dark-grey">
             Debug: metric={displayMode.metric} | timeMode={displayMode.timeMode} |
             scale={displayMode.scale} | sortMode={sortMode} |
             sortDirection={sortDirection} | maxDate={selectedDate} |
             startDate={timelineStartDate} | timelineDate={timelineDate} |
             sidebarOpen={String(isSidebarOpen)} | {statusText}
-          </p>
+          </p> */}
           <TimeProgressBar
             dates={meta?.c_dates ?? []}
             startDate={timelineStartDate}

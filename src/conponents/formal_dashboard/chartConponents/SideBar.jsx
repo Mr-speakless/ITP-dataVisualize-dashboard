@@ -12,7 +12,7 @@ import {
 import { getFlagUrlForRegion, getNationalColorForRegion } from '../countryFlags.js'
 
 const iconClassName =
-  'shrink-0 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current'
+  'shrink-0 text-inherit [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current'
 
 function CountryRow({
   country,
@@ -36,7 +36,7 @@ function CountryRow({
     <button
       type="button"
       onClick={() => onToggle(country.name)}
-      className="grid w-full grid-cols-[20px_30px_minmax(0,1fr)_minmax(96px,auto)] items-center gap-3 rounded-[5px] px-1 py-1 text-left transition-colors duration-150 hover:bg-grey-bg"
+      className="grid w-full grid-cols-[20px_30px_minmax(0,1fr)_minmax(96px,auto)] items-center gap-3 rounded-[5px] px-1 py-1 text-left text-black opacity-100 transition-colors duration-150 hover:bg-grey-bg"
       aria-pressed={isSelected}
       data-name="CountryRow"
     >
@@ -96,9 +96,9 @@ const SideBar = ({
   const sortLabel = sortMode === 'per-100k' ? 'Per 100k' : 'Total'
 
   return (
-    <aside className="absolute right-0 top-[calc(100%+12px)] z-20 w-full max-w-[380px]">
+    <aside className="absolute right-0 top-[calc(100%+12px)] z-40 isolate w-full max-w-[380px] opacity-100">
       <div
-        className="flex max-h-[min(70vh,560px)] flex-col gap-3 overflow-hidden rounded-[4px] border border-grey bg-white px-4 py-3 shadow-[0_0_4px_0_rgba(0,0,0,0.25)]"
+        className="flex max-h-[min(70vh,560px)] flex-col gap-3 overflow-hidden rounded-[4px] border border-grey bg-white px-4 py-3 text-black opacity-100 shadow-[0_0_4px_0_rgba(0,0,0,0.25)]"
         data-name="RegionSelecting Bar"
         data-node-id="75:446"
       >
@@ -115,7 +115,7 @@ const SideBar = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-medium-grey transition-colors duration-150 hover:bg-grey-bg hover:text-black"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[var(--color-medium-grey)] opacity-100 transition-colors duration-150 hover:bg-grey-bg hover:text-black"
             aria-label="Close side bar"
             data-node-id="75:449"
           >
@@ -125,7 +125,7 @@ const SideBar = ({
 
         <div className="flex items-center gap-2">
           <label
-            className="flex h-8 min-w-0 flex-1 items-center gap-[10px] rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-medium-grey transition-colors duration-150 focus-within:border-theme focus-within:text-theme"
+            className="flex h-8 min-w-0 flex-1 items-center gap-[10px] rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-[var(--color-medium-grey)] opacity-100 transition-colors duration-150 focus-within:border-theme focus-within:text-theme"
             data-node-id="75:450"
           >
             <span
@@ -145,7 +145,7 @@ const SideBar = ({
           <button
             type="button"
             onClick={onResetSidebar}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border-2 border-grey bg-white text-medium-grey transition-colors duration-150 hover:border-theme hover:text-theme"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border-2 border-grey bg-white text-[var(--color-medium-grey)] opacity-100 transition-colors duration-150 hover:border-theme hover:text-theme"
             aria-label="Reset sidebar filters"
             title="Reset sidebar filters"
           >
@@ -159,11 +159,11 @@ const SideBar = ({
 
         <div className="flex h-10 items-start justify-between gap-3" data-node-id="75:453">
           <div
-            className="relative flex h-10 min-w-0 flex-1 items-center rounded-[5px] border-2 border-grey bg-white text-dark-grey transition-colors duration-150 focus-within:border-theme"
+            className="relative flex h-10 min-w-0 flex-1 items-center rounded-[5px] border-2 border-grey bg-white text-[var(--color-dark-grey)] opacity-100 transition-colors duration-150 focus-within:border-theme"
             data-node-id="75:454"
           >
             <span
-              className={`${iconClassName} pointer-events-none ml-3 h-[9px] w-[14px] text-medium-grey`}
+              className={`${iconClassName} pointer-events-none ml-3 h-[9px] w-[14px] text-[var(--color-medium-grey)] opacity-100`}
               aria-hidden="true"
               data-node-id="75:455"
               dangerouslySetInnerHTML={{ __html: sortIcon }}
@@ -177,7 +177,7 @@ const SideBar = ({
               <option value="total">Sort by Total</option>
               <option value="per-100k">Sort by Per 100k</option>
             </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ty-small text-dark-grey">
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ty-small text-[var(--color-dark-grey)] opacity-100">
               v
             </span>
           </div>
@@ -185,7 +185,7 @@ const SideBar = ({
           <button
             type="button"
             onClick={onToggleSortDirection}
-            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-[5px] bg-grey text-dark-grey transition-colors duration-150 hover:bg-medium-grey/30 hover:text-black"
+            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-[5px] bg-grey text-[var(--color-dark-grey)] opacity-100 transition-colors duration-150 hover:bg-medium-grey/30 hover:text-black"
             aria-label={sortDirectionLabel}
             title={sortDirectionLabel}
             data-node-id="75:459"

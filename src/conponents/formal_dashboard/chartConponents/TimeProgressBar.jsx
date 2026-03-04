@@ -254,7 +254,7 @@ export default function TimeProgressBar({
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] transition-colors duration-150 ${
           isPlaying
             ? 'bg-[var(--color-theme)]'
-            : 'bg-[var(--color-dark-grey)] hover:bg-[var(--color-cold-grey)] active:bg-[var(--color-theme)]'
+            : 'bg-[var(--color-cold-grey)] hover:bg-[var(--color-medium-grey)] active:bg-[var(--color-theme)]'
         } disabled:cursor-not-allowed disabled:bg-[var(--color-medium-grey)]`}
         aria-label={isPlaying ? 'Pause time progress' : 'Play time progress'}
       >
