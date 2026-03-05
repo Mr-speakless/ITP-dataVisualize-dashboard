@@ -11,7 +11,8 @@ const DataFilterBar = ({
 }) => {
   return (
     <div
-      className="relative z-30 isolate flex items-center justify-end"
+      className="relative isolate flex items-center justify-end"
+      style={{ zIndex: 3000 }}
       data-name="DataFilterBar"
       data-node-id="79:645"
     >

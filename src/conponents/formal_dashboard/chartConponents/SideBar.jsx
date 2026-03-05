@@ -96,7 +96,10 @@ const SideBar = ({
   const sortLabel = sortMode === 'per-100k' ? 'Per 100k' : 'Total'
 
   return (
-    <aside className="absolute right-0 top-[calc(100%+12px)] z-40 isolate w-full max-w-[380px] opacity-100">
+    <aside
+      className="absolute right-0 top-[calc(100%+12px)] isolate w-full max-w-[380px] opacity-100"
+      style={{ zIndex: 3001 }}
+    >
       <div
         className="flex max-h-[min(70vh,560px)] flex-col gap-3 overflow-hidden rounded-[4px] border border-grey bg-white px-4 py-3 text-black opacity-100 shadow-[0_0_4px_0_rgba(0,0,0,0.25)]"
         data-name="RegionSelecting Bar"
