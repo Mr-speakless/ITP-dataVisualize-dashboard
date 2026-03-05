@@ -34,19 +34,27 @@ function SelectedCountryChip({ countryName, onRemove }) {
 
   return (
     <div
-      className="group inline-flex h-11 items-center rounded-full border px-3 transition-colors duration-150 hover:bg-[var(--chip-hover-bg)] focus-within:bg-[var(--chip-hover-bg)]"
+      className="group inline-flex items-center rounded-full border px-2 py-1 transition-colors duration-150 hover:bg-[var(--chip-hover-bg)] focus-within:bg-[var(--chip-hover-bg)]"
       style={chipStyle}
     >
-      <span
-        className="mr-3 h-4 w-4 shrink-0 rounded-full"
-        style={{ backgroundColor: nationalColor }}
-        aria-hidden="true"
-      />
-      <span className="ty-small whitespace-nowrap text-black">{countryName}</span>
+      <div className='flex flex-row gap-1 items-center'>
+        <span
+          className="h-3 w-3 shrink-0 rounded-full"
+          style={{ backgroundColor: nationalColor }}
+          aria-hidden="true"
+        />
+        <span className="ty-small whitespace-nowrap text-black">{countryName}</span>
+      </div>
+
       <button
         type="button"
         onClick={() => onRemove(countryName)}
-        className="ml-0 flex h-6 w-0 shrink-0 items-center justify-center overflow-hidden rounded-full bg-transparent text-[var(--chip-close-color)] opacity-0 transition-all duration-150 hover:bg-[var(--chip-close-hover-bg)] hover:text-[var(--chip-close-hover-color)] group-hover:ml-2 group-hover:w-6 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:w-6 group-focus-within:opacity-100 active:bg-[var(--chip-close-active-bg)] active:text-white"
+        className="ml-0 flex h-4 w-0 shrink-0 items-center justify-center overflow-hidden 
+        rounded-full bg-transparent text-[var(--chip-close-color)] opacity-0 transition-all duration-150 
+        hover:bg-[var(--chip-close-hover-bg)] hover:text-[var(--chip-close-hover-color)] 
+        group-hover:ml-1 group-hover:w-4 group-hover:opacity-100 group-focus-within:ml-1 
+        group-focus-within:w-4 group-focus-within:opacity-100 
+        active:bg-[var(--chip-close-active-bg)] active:text-white"
         aria-label={`Remove ${countryName}`}
       >
         <span className="text-base leading-none">x</span>
