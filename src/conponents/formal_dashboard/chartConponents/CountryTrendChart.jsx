@@ -273,7 +273,10 @@ export default function CountryTrendChart({
   }
 
   return (
-    <div className="relative z-0 w-full overflow-visible bg-[#ffffff]">
+    <div
+      className="relative w-full overflow-visible bg-[#ffffff]"
+      style={{ zIndex: 30 }}
+    >
       <svg
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         className="block h-auto w-full"
@@ -466,10 +469,10 @@ export default function CountryTrendChart({
 
       {hoveredIndex != null ? (
         <div
-          className={`pointer-events-none absolute z-30 rounded-[12px] bg-white/96 px-5 py-4 shadow-[0_12px_24px_rgba(0,0,0,0.14)] ${
+          className={`pointer-events-none absolute rounded-[12px] bg-white/96 px-5 py-4 shadow-[0_12px_24px_rgba(0,0,0,0.14)] ${
             tooltipColumnCount === 2 ? 'min-w-[460px]' : 'min-w-[220px]'
           }`}
-          style={tooltipStyle}
+          style={{ ...tooltipStyle, zIndex: 999 }}
         >
           <div className="mb-3 flex items-center justify-between gap-6">
             <span className="ty-small text-black">{formatHoverDate(hoveredDate)}</span>

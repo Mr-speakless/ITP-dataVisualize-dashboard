@@ -246,7 +246,10 @@ export default function TimeProgressBar({
   }
 
   return (
-    <div className="flex w-full items-center gap-3 rounded-[14px] bg-[var(--color-grey-bg)] px-4 py-3">
+    <div
+      className="relative flex w-full items-center gap-3 rounded-[14px] bg-[var(--color-grey-bg)] px-4 py-3"
+      style={{ zIndex: 1 }}
+    >
       <button
         type="button"
         onClick={handlePlayToggle}
@@ -298,7 +301,7 @@ export default function TimeProgressBar({
             style={{ width: `${trackProgress * 100}%` }}
           />
           <div
-            className="absolute inset-y-0 z-10 flex items-center"
+            className="absolute inset-y-0 flex items-center"
             style={{
               left: `${trackProgress * 100}%`,
               transform:
