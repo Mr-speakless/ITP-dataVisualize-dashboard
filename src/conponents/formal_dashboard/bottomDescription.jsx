@@ -43,6 +43,13 @@ const contentBlocks = [
         ],
     },
     {
+        title: 'GitHub Repo',
+        items: [{
+            label: 'ITP-dataVisualize-dashboard',
+            href: 'https://github.com/Mr-speakless/ITP-dataVisualize-dashboard',
+        }],
+    },
+    {
         title: 'Developed By',
         items: ['John Henry Thompson', 'Shindy Johnson', 'Shouyue(Luas) Wu'],
     }
