@@ -267,7 +267,7 @@ export default function CountryTrendChart({
   }, [hoveredEntries, tooltipColumnCount])
 
   const tooltipStyle = useMemo(() => {
-    if (hoveredIndex == null || !hoveredPointer) {
+    if (isCompactLayout || hoveredIndex == null || !hoveredPointer) {
       return {}
     }
 
@@ -487,10 +487,17 @@ export default function CountryTrendChart({
           fill="#ffffff"
           fillOpacity="0.001"
           onPointerLeave={() => {
+            if (isCompactLayout) {
+              return
+            }
             setHoveredIndex(null)
             setHoveredPointer(null)
           }}
           onPointerMove={(event) => {
+            if (isCompactLayout) {
+              return
+            }
+
             if (dates.length === 0) {
               setHoveredIndex(null)
               setHoveredPointer(null)
@@ -509,10 +516,23 @@ export default function CountryTrendChart({
               y: event.clientY - svgBounds.top,
             })
           }}
+          onPointerDown={(event) => {
+            if (!isCompactLayout || dates.length === 0) {
+              return
+            }
+
+            const bounds = event.currentTarget.getBoundingClientRect()
+            const relativeX = clamp((event.clientX - bounds.left) / bounds.width, 0, 1)
+            const nextIndex =
+              dates.length === 1 ? 0 : Math.round(relativeX * (dates.length - 1))
+
+            setHoveredIndex(nextIndex)
+            setHoveredPointer(null)
+          }}
         />
       </svg>
 
-      {hoveredIndex != null ? (
+      {!isCompactLayout && hoveredIndex != null ? (
         <div
           className={`pointer-events-none absolute rounded-[12px] bg-white/96 px-5 py-4 shadow-[0_12px_24px_rgba(0,0,0,0.14)] ${
             tooltipColumnCount === 2 ? 'min-w-[460px]' : 'min-w-[220px]'
@@ -547,6 +567,38 @@ export default function CountryTrendChart({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {isCompactLayout ? (
+        hoveredIndex != null ? (
+          <div className="mt-3 rounded-[12px] border border-grey bg-white px-4 py-4 shadow-[0_8px_16px_rgba(0,0,0,0.08)]">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <span className="ty-small text-black">{formatHoverDate(hoveredDate)}</span>
+              <span className="ty-small text-dark-grey">
+                {toTitleCase(getTimeModeLabel(displayMode?.timeMode))}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {hoveredEntries.map((item) => (
+                <div key={`compact-tooltip-${item.name}`} className="flex items-center gap-3">
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="ty-small min-w-0 flex-1 truncate text-black">{item.name}</span>
+                  <span className="ty-small text-black">{formatDashboardNumber(item.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-[12px] border border-grey bg-grey-bg px-4 py-3">
+            <p className="ty-small text-dark-grey">
+              Tap on the chart to view values at that date.
+            </p>
+          </div>
+        )
       ) : null}
     </div>
   )

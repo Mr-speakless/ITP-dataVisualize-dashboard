@@ -169,13 +169,13 @@ const SideBar = ({
           </button>
         </div>
 
-        <div className="flex h-10 items-start justify-between gap-3 md:h-8 md:items-center md:gap-2" data-node-id="75:453">
+        <div className="flex items-center gap-2" data-node-id="75:453">
           <div
-            className="relative flex h-10 min-w-0 flex-1 items-center rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-[var(--color-dark-grey)] opacity-100 transition-colors duration-150 focus-within:border-theme md:h-8"
+            className="relative flex h-8 min-w-0 flex-1 items-center rounded-[5px] border-2 border-grey bg-white px-2 py-1 text-[var(--color-dark-grey)] opacity-100 transition-colors duration-150 focus-within:border-theme"
             data-node-id="75:454"
           >
             <span
-              className={`${iconClassName} pointer-events-none h-[9px] w-[14px] text-[var(--color-medium-grey)] opacity-100`}
+              className={`${iconClassName} pointer-events-none h-4 w-4 text-[var(--color-medium-grey)] opacity-100`}
               aria-hidden="true"
               data-node-id="75:455"
               dangerouslySetInnerHTML={{ __html: sortIcon }}
@@ -183,7 +183,7 @@ const SideBar = ({
             <select
               value={sortMode}
               onChange={(event) => onSortModeChange(event.target.value)}
-              className="ty-small h-full w-full appearance-none bg-transparent pl-2 pr-8 text-dark-grey outline-none"
+              className="ty-small h-full w-full appearance-none bg-transparent pl-2 pr-7 text-dark-grey outline-none"
               aria-label="Sort countries by"
             >
               <option value="total">Sort by Total</option>
@@ -200,13 +200,13 @@ const SideBar = ({
           <button
             type="button"
             onClick={onToggleSortDirection}
-            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-[5px] bg-grey text-[var(--color-dark-grey)] opacity-100 transition-colors duration-150 hover:bg-medium-grey/30 hover:text-black md:h-8 md:w-8 md:border-2 md:border-grey md:bg-white md:hover:border-theme md:hover:text-theme"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border-2 border-grey bg-white text-[var(--color-medium-grey)] opacity-100 transition-colors duration-150 hover:border-theme hover:text-theme"
             aria-label={sortDirectionLabel}
             title={sortDirectionLabel}
             data-node-id="75:459"
           >
             <span
-              className={`${iconClassName} h-[17px] w-[20px] md:h-[18px] md:w-[18px]`}
+              className={`${iconClassName} h-[18px] w-[18px]`}
               aria-hidden="true"
               data-node-id="75:460"
               dangerouslySetInnerHTML={{ __html: sortDirectionIcon }}

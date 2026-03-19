@@ -324,6 +324,23 @@ export default function WorldProjectionMap({
   const containerRef = useRef(null)
   const [hoveredCountryCode, setHoveredCountryCode] = useState(null)
   const [hoveredPointer, setHoveredPointer] = useState(null)
+  const [isCompactLayout, setIsCompactLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 639px)')
+    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
+
+    updateMatch()
+    mediaQuery.addEventListener('change', updateMatch)
+
+    return () => mediaQuery.removeEventListener('change', updateMatch)
+  }, [])
 
   const countryByCode = useMemo(() => buildCountryByCode(countries), [countries])
   const selectedCountryCodes = useMemo(
@@ -331,11 +348,6 @@ export default function WorldProjectionMap({
     [selectedCountries]
   )
   const hoveredCountry = hoveredCountryCode ? countryByCode[hoveredCountryCode] : null
-  const mappedCountryCount = Object.keys(countryByCode).length
-  const countriesWithValueCount = useMemo(
-    () => countries.filter((country) => getDisplayValue(country, displayMode) > 0).length,
-    [countries, displayMode]
-  )
   const legendScale = useMemo(
     () => buildLegendScale(countries, displayMode),
     [countries, displayMode]
@@ -355,6 +367,25 @@ export default function WorldProjectionMap({
       ),
     [countryByCode, displayMode, hoveredCountryCode, legendScale, selectedCountryCodes]
   )
+  const selectedCountryEntries = useMemo(() => {
+    const countriesByName = new Map(countries.map((country) => [country.name, country]))
+
+    return selectedCountries
+      .map((countryName) => countriesByName.get(countryName))
+      .filter(Boolean)
+      .map((country) => ({
+        color: getNationalColorForRegion(country.name),
+        name: country.name,
+        value: getDisplayValue(country, displayMode),
+      }))
+      .sort((left, right) => {
+        if (right.value === left.value) {
+          return left.name.localeCompare(right.name)
+        }
+
+        return right.value - left.value
+      })
+  }, [countries, displayMode, selectedCountries])
 
   useEffect(() => {
     if (!hoveredCountryName) {
@@ -403,11 +434,19 @@ export default function WorldProjectionMap({
         className="relative w-full overflow-hidden rounded-[4px] bg-[#dfe7ec] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
         aria-label="World projection map"
         onPointerLeave={() => {
+          if (isCompactLayout) {
+            return
+          }
+
           setHoveredCountryCode(null)
           setHoveredPointer(null)
           onHoverCountryChange?.('')
         }}
         onPointerMove={(event) => {
+          if (isCompactLayout) {
+            return
+          }
+
           const path = event.target.closest?.('path')
 
           if (!path || !containerRef.current?.contains(path)) {
@@ -478,7 +517,7 @@ export default function WorldProjectionMap({
           </div>
         </div>
 
-        {hoveredCountry && hoveredPointer ? (
+        {!isCompactLayout && hoveredCountry && hoveredPointer ? (
           <div
             className="pointer-events-none absolute z-20 max-w-[220px] rounded-[10px] bg-white/90 px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[5px] sm:max-w-[280px] sm:px-5 sm:py-3"
             style={{
@@ -509,13 +548,6 @@ export default function WorldProjectionMap({
       </div>
 
       <div className="flex flex-col gap-2 rounded-[10px] border border-grey bg-grey-bg/60 px-3 py-3 sm:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          
-          <div className="ty-small text-dark-grey">
-            {timelineDate || 'N/A'} | {countriesWithValueCount} regions with values | {mappedCountryCount} mapped
-          </div>
-        </div>
-
         <div className="w-full overflow-x-auto">
           <div className="min-w-[290px]">
             <div className="grid grid-cols-5 overflow-hidden rounded-[8px] border border-black/10">
@@ -542,6 +574,35 @@ export default function WorldProjectionMap({
           </div>
         </div>
       </div>
+
+      {isCompactLayout ? (
+        <div className="flex flex-col gap-2 rounded-[10px] border border-grey bg-white px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="ty-small text-black">{String(timelineDate ?? '').replace(/-/g, '/')}</span>
+            <span className="ty-small text-dark-grey">{buildDisplayModeLabel(displayMode)}</span>
+          </div>
+
+          {selectedCountryEntries.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {selectedCountryEntries.map((item) => (
+                <div key={`map-slice-${item.name}`} className="flex items-center gap-3">
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="ty-small min-w-0 flex-1 truncate text-black">{item.name}</span>
+                  <span className="ty-small text-black">{formatDashboardNumber(item.value)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="ty-small text-dark-grey">
+              Select countries to view the current map slice values.
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
