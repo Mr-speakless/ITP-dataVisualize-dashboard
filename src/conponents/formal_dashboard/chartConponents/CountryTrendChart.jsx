@@ -1,17 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   formatDashboardNumber,
   getTimeModeLabel,
 } from '../worldData.js'
 
 const chartWidth = 1100
-const chartHeight = 420
-const chartMargin = {
-  top: 18,
-  right: 24,
-  bottom: 54,
-  left: 82,
-}
 const gridSegments = 10
 const yAxisStepMultipliers = [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]
 
@@ -80,7 +73,7 @@ function formatHoverDate(date) {
   return `${year}/${Number(month)}/${Number(day)}`
 }
 
-function buildXAxisTicks(dates) {
+function buildXAxisTicks(dates, isCompactLayout) {
   const ticks = []
 
   dates.forEach((date, index) => {
@@ -96,7 +89,7 @@ function buildXAxisTicks(dates) {
       return
     }
 
-    if (day === 1 && [4, 7, 10].includes(month)) {
+    if (!isCompactLayout && day === 1 && [4, 7, 10].includes(month)) {
       ticks.push({ index, label: '', type: 'minor' })
     }
   })
@@ -147,14 +140,50 @@ export default function CountryTrendChart({
   error = '',
   highlightedCountryName = '',
 }) {
+  const containerRef = useRef(null)
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [hoveredPointer, setHoveredPointer] = useState(null)
+  const [isCompactLayout, setIsCompactLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 639px)')
+    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
+
+    updateMatch()
+    mediaQuery.addEventListener('change', updateMatch)
+
+    return () => mediaQuery.removeEventListener('change', updateMatch)
+  }, [])
+
+  const chartHeight = isCompactLayout ? 520 : 420
+  const chartMargin = isCompactLayout
+    ? {
+        top: 18,
+        right: 6,
+        bottom: 44,
+        left: 74,
+      }
+    : {
+        top: 18,
+        right: 24,
+        bottom: 54,
+        left: 82,
+      }
 
   const innerWidth = chartWidth - chartMargin.left - chartMargin.right
   const innerHeight = chartHeight - chartMargin.top - chartMargin.bottom
 
   const yAxis = useMemo(() => buildYAxis(series), [series])
-  const xAxisTicks = useMemo(() => buildXAxisTicks(dates), [dates])
+  const xAxisTicks = useMemo(
+    () => buildXAxisTicks(dates, isCompactLayout),
+    [dates, isCompactLayout]
+  )
 
   const plottedSeries = useMemo(() => {
     const xDivisor = Math.max(dates.length - 1, 1)
@@ -222,7 +251,8 @@ export default function CountryTrendChart({
       })
   }, [hoveredIndex, innerHeight, plottedSeries])
 
-  const tooltipColumnCount = hoveredEntries.length > 8 ? 2 : 1
+  const tooltipColumnCount =
+    isCompactLayout ? 1 : hoveredEntries.length > 8 ? 2 : 1
   const tooltipColumns = useMemo(() => {
     if (tooltipColumnCount === 1) {
       return [hoveredEntries]
@@ -241,12 +271,20 @@ export default function CountryTrendChart({
       return {}
     }
 
+    const tooltipWidth = isCompactLayout ? 220 : tooltipColumnCount === 2 ? 460 : 220
+    const containerWidth = containerRef.current?.clientWidth ?? tooltipWidth
+    const tooltipLeft = clamp(
+      hoveredPointer.x - (isCompactLayout ? tooltipWidth / 2 : tooltipWidth + 20),
+      8,
+      Math.max(containerWidth - tooltipWidth - 8, 8)
+    )
+
     return {
-      left: `${hoveredPointer.x - 20}px`,
-      top: `${hoveredPointer.y}px`,
-      transform: 'translate(-100%, 0)',
+      left: `${tooltipLeft}px`,
+      top: `${Math.max(hoveredPointer.y + (isCompactLayout ? 12 : 0), 8)}px`,
+      transform: 'translate(0, 0)',
     }
-  }, [hoveredIndex, hoveredPointer])
+  }, [hoveredIndex, hoveredPointer, isCompactLayout, tooltipColumnCount])
 
   if (error) {
     return (
@@ -274,6 +312,7 @@ export default function CountryTrendChart({
 
   return (
     <div
+      ref={containerRef}
       className="relative w-full overflow-visible bg-[#ffffff]"
       style={{ zIndex: 30 }}
     >
@@ -341,11 +380,14 @@ export default function CountryTrendChart({
           return (
             <text
               key={`y-label-${tickValue}`}
-              x={chartMargin.left - 16}
+              x={chartMargin.left - (isCompactLayout ? 8 : 16)}
               y={y + 5}
               textAnchor="end"
               className="fill-black"
-              style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 16 }}
+              style={{
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: isCompactLayout ? 16 : 16,
+              }}
             >
               {formatAxisValue(tickValue)}
             </text>
@@ -375,7 +417,10 @@ export default function CountryTrendChart({
                   y={chartMargin.top + innerHeight + 32}
                   textAnchor="middle"
                   className="fill-black"
-                  style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 18 }}
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: isCompactLayout ? 18 : 18,
+                  }}
                 >
                   {tick.label}
                 </text>
@@ -472,7 +517,11 @@ export default function CountryTrendChart({
           className={`pointer-events-none absolute rounded-[12px] bg-white/96 px-5 py-4 shadow-[0_12px_24px_rgba(0,0,0,0.14)] ${
             tooltipColumnCount === 2 ? 'min-w-[460px]' : 'min-w-[220px]'
           }`}
-          style={{ ...tooltipStyle, zIndex: 999 }}
+          style={{
+            ...tooltipStyle,
+            zIndex: 999,
+            maxWidth: isCompactLayout ? '220px' : undefined,
+          }}
         >
           <div className="mb-3 flex items-center justify-between gap-6">
             <span className="ty-small text-black">{formatHoverDate(hoveredDate)}</span>

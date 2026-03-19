@@ -248,6 +248,14 @@ function buildLegendScale(countries, displayMode) {
   }
 }
 
+function buildLegendBoundaries(levels) {
+  if (!Array.isArray(levels) || levels.length === 0) {
+    return []
+  }
+
+  return [levels[0].lowerLabel, ...levels.map((level) => level.upperLabel)]
+}
+
 function buildCountrySelectors(countryCode, countryName) {
   const selectors = new Set([`path[id="${escapeAttributeValue(countryCode)}"]`])
   const mapName = mapIncludedCountry[countryCode]
@@ -328,10 +336,13 @@ export default function WorldProjectionMap({
     () => countries.filter((country) => getDisplayValue(country, displayMode) > 0).length,
     [countries, displayMode]
   )
-  const tooltipMaxLeft = Math.max((containerRef.current?.clientWidth ?? 320) - 286, 12)
   const legendScale = useMemo(
     () => buildLegendScale(countries, displayMode),
     [countries, displayMode]
+  )
+  const legendBoundaries = useMemo(
+    () => buildLegendBoundaries(legendScale.levels),
+    [legendScale.levels]
   )
   const styledWorldMapSvg = useMemo(
     () =>
@@ -386,23 +397,7 @@ export default function WorldProjectionMap({
   }
 
   return (
-    <>
-    {/* <div className="relative flex w-full flex-col gap-4 rounded-[14px] border border-grey bg-grey-bg p-4"> */}
-      {/* <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="ty-small text-black">{legendScale.preset.label}</div>
-          <div className="ty-small text-dark-grey">
-            Frame date {timelineDate || 'N/A'} | {countriesWithValueCount} regions with values |{' '}
-            {mappedCountryCount} mapped in current SVG
-          </div>
-        </div>
-        <div className="ty-small text-dark-grey">
-          {isUpdating
-            ? 'Fetching next frame...'
-            : 'Map is up to date.'}
-        </div>
-      </div> */}
-
+    <div className="flex w-full flex-col gap-3">
       <div
         ref={containerRef}
         className="relative w-full overflow-hidden rounded-[4px] bg-[#dfe7ec] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
@@ -458,9 +453,7 @@ export default function WorldProjectionMap({
       >
         <div dangerouslySetInnerHTML={{ __html: styledWorldMapSvg }} />
 
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10 w-[min(240px,calc(100%-2rem))] rounded-[10px] border border-white/60 bg-[rgba(255,255,255,0.3)] px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur-[6px]">
-          
-
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden w-[min(240px,calc(100%-2rem))] rounded-[10px] border border-white/60 bg-[rgba(255,255,255,0.3)] px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur-[6px] sm:block">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <span
@@ -487,29 +480,68 @@ export default function WorldProjectionMap({
 
         {hoveredCountry && hoveredPointer ? (
           <div
-            className="pointer-events-none absolute z-20  rounded-[10px] shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[5px]"
+            className="pointer-events-none absolute z-20 max-w-[220px] rounded-[10px] bg-white/90 px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[5px] sm:max-w-[280px] sm:px-5 sm:py-3"
             style={{
-              left: `${clamp(hoveredPointer.x + 12, 12, tooltipMaxLeft)}px`,
+              left: `${clamp(
+                hoveredPointer.x + 12,
+                12,
+                Math.max((containerRef.current?.clientWidth ?? 320) - 232, 12)
+              )}px`,
               top: `${Math.max(hoveredPointer.y + 12, 48)}px`,
             }}
           >
-            <div className="flex items-center justify-between gap-2 px-5 py-1.5">
-              <span className="ty-text text-black">
+            <div className="flex items-center justify-between gap-2 px-2 py-1 sm:px-0">
+              <span className="ty-small text-black">
                 {String(timelineDate ?? '').replace(/-/g, '/')}
               </span>
-              <span className="ty-text text-black">{buildDisplayModeLabel(displayMode)}</span>
+              <span className="ty-small text-black">{buildDisplayModeLabel(displayMode)}</span>
             </div>
-            <div className="flex items-center gap-2 px-5 py-1.5">
-              <span className="ty-text min-w-0 flex-1 truncate text-black">
+            <div className="flex items-center gap-2 px-2 py-1 sm:px-0">
+              <span className="ty-small min-w-0 flex-1 truncate text-black">
                 {hoveredCountry.name}
               </span>
-              <span className="ty-text shrink-0 text-black">
+              <span className="ty-small shrink-0 text-black">
                 {formatDashboardNumber(getDisplayValue(hoveredCountry, displayMode))}
               </span>
             </div>
           </div>
         ) : null}
       </div>
-    </>
+
+      <div className="flex flex-col gap-2 rounded-[10px] border border-grey bg-grey-bg/60 px-3 py-3 sm:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          
+          <div className="ty-small text-dark-grey">
+            {timelineDate || 'N/A'} | {countriesWithValueCount} regions with values | {mappedCountryCount} mapped
+          </div>
+        </div>
+
+        <div className="w-full overflow-x-auto">
+          <div className="min-w-[290px]">
+            <div className="grid grid-cols-5 overflow-hidden rounded-[8px] border border-black/10">
+              {legendScale.levels.map((level) => (
+                <span
+                  key={`legend-swatch-${level.index}`}
+                  className="h-6 w-full"
+                  style={{ backgroundColor: level.color }}
+                />
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-6 text-[0.66rem] text-dark-grey sm:text-[0.78rem]">
+              {legendBoundaries.map((boundaryLabel, index) => (
+                <span
+                  key={`legend-boundary-${index}`}
+                  className={`${
+                    index === 0 ? 'text-left' : index === legendBoundaries.length - 1 ? 'text-right' : 'text-center'
+                  }`}
+                >
+                  {boundaryLabel}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

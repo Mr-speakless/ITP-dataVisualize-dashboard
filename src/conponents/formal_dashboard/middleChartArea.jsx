@@ -476,14 +476,14 @@ const MiddleChartArea = () => {
       : error || seriesError || `Selected countries -> ${selectedCountriesDebug}`
 
   return (
-    <section className="w-full bg-white py-8 sm:py-10">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col items-start gap-6 px-5">
-        <div className="ty-h2">
-          6,881,804 Worldwide Deaths to date 2023-03-09 — Uncover the Trends
+    <section className="w-full bg-white py-6 sm:py-10">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col items-start gap-5 px-4 sm:gap-6 sm:px-5">
+        <div className="ty-h2 w-full text-left">
+          6,881,804 Worldwide Deaths to date 2023-03-09 - Uncover the Trends
         </div>
         <ChartViewToggle value={chart} onChange={setChart} />
 
-        <div className="flex w-full max-w-[1200px] flex-col gap-5 rounded-xl p-5 shadow-[0_0_8px_0_rgba(0,0,0,0.15)]">
+        <div className="flex w-full max-w-[1200px] flex-col gap-4 rounded-xl p-4 shadow-[0_0_8px_0_rgba(0,0,0,0.15)] sm:gap-5 sm:p-5">
           <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <ViewSwitcher value={displayMode} onChange={setDisplayMode} />
             <DataFilterBar
@@ -548,10 +548,10 @@ const MiddleChartArea = () => {
               )
             }
           />
-           <div className="ty-small text-dark-grey flex flex-row gap-10">
-            <div>Start Date: {timelineStartDate}</div>
-            <div>Chart Showing Date: {timelineDate}</div>
-           </div>
+          <div className="hidden w-full text-left sm:flex sm:flex-row sm:gap-10">
+            <div className="ty-small text-dark-grey">Start Date: {timelineStartDate}</div>
+            <div className="ty-small text-dark-grey">Chart Showing Date: {timelineDate}</div>
+          </div>
           {chart ? (
             <CountryTrendChart
               series={trendSeries}
@@ -602,3 +602,4 @@ const MiddleChartArea = () => {
 }
 
 export default MiddleChartArea
+

@@ -1,4 +1,5 @@
-import { getNationalColorForRegion } from '../countryFlags.js'
+import { useEffect, useState } from 'react'
+import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFlags.js'
 
 function hexToRgb(hexColor) {
   const normalizedHex = hexColor.replace('#', '')
@@ -19,8 +20,64 @@ function withOpacity(hexColor, opacity) {
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`
 }
 
-function SelectedCountryChip({ countryName, onRemove }) {
+function buildCountryAbbreviation(countryName) {
+  const countryCode = getCountryCodeForRegion(countryName)
+
+  if (countryCode === 'GB') {
+    return 'UK'
+  }
+
+  if (countryCode) {
+    return countryCode
+  }
+
+  const words = String(countryName ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase()
+  }
+
+  return String(countryName ?? '').slice(0, 3).toUpperCase()
+}
+
+function useCompactLayout() {
+  const getInitialValue = () =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+
+  const [isCompactLayout, setIsCompactLayout] = useState(getInitialValue)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 639px)')
+    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
+
+    updateMatch()
+    mediaQuery.addEventListener('change', updateMatch)
+
+    return () => mediaQuery.removeEventListener('change', updateMatch)
+  }, [])
+
+  return isCompactLayout
+}
+
+function SelectedCountryChip({
+  countryName,
+  isCompactLayout,
+  isExpanded,
+  onExpand,
+  onRemove,
+}) {
   const nationalColor = getNationalColorForRegion(countryName)
+  const compactLabel = buildCountryAbbreviation(countryName)
 
   const chipStyle = {
     borderColor: withOpacity(nationalColor, 0.9),
@@ -34,27 +91,41 @@ function SelectedCountryChip({ countryName, onRemove }) {
 
   return (
     <div
-      className="group inline-flex items-center rounded-full border px-2 py-1 transition-colors duration-150 hover:bg-[var(--chip-hover-bg)] focus-within:bg-[var(--chip-hover-bg)]"
+      className={`group inline-flex max-w-full items-center rounded-full border px-2 py-1 transition-colors duration-150 hover:bg-[var(--chip-hover-bg)] focus-within:bg-[var(--chip-hover-bg)] ${
+        isCompactLayout && isExpanded ? 'gap-1' : ''
+      }`}
       style={chipStyle}
     >
-      <div className='flex flex-row gap-1 items-center'>
+      <button
+        type="button"
+        onClick={() => {
+          if (isCompactLayout) {
+            onExpand(countryName)
+          }
+        }}
+        className="flex min-w-0 flex-row items-center gap-1 bg-transparent p-0 text-left"
+        aria-expanded={isCompactLayout ? isExpanded : undefined}
+      >
         <span
           className="h-3 w-3 shrink-0 rounded-full"
           style={{ backgroundColor: nationalColor }}
           aria-hidden="true"
         />
-        <span className="ty-small whitespace-nowrap text-black">{countryName}</span>
-      </div>
+        <span className="ty-small whitespace-nowrap text-black">
+          {isCompactLayout && !isExpanded ? compactLabel : countryName}
+        </span>
+      </button>
 
       <button
         type="button"
         onClick={() => onRemove(countryName)}
-        className="ml-0 flex h-4 w-0 shrink-0 items-center justify-center overflow-hidden 
-        rounded-full bg-transparent text-[var(--chip-close-color)] opacity-0 transition-all duration-150 
-        hover:bg-[var(--chip-close-hover-bg)] hover:text-[var(--chip-close-hover-color)] 
-        group-hover:ml-1 group-hover:w-4 group-hover:opacity-100 group-focus-within:ml-1 
-        group-focus-within:w-4 group-focus-within:opacity-100 
-        active:bg-[var(--chip-close-active-bg)] active:text-white"
+        className={`flex shrink-0 items-center justify-center rounded-full transition-all duration-150 active:bg-[var(--chip-close-active-bg)] active:text-white ${
+          isCompactLayout
+            ? isExpanded
+              ? 'ml-1 h-4 w-4 bg-transparent text-[var(--chip-close-color)] hover:bg-[var(--chip-close-hover-bg)] hover:text-[var(--chip-close-hover-color)]'
+              : 'h-0 w-0 overflow-hidden opacity-0'
+            : 'ml-0 h-4 w-0 overflow-hidden bg-transparent text-[var(--chip-close-color)] opacity-0 hover:bg-[var(--chip-close-hover-bg)] hover:text-[var(--chip-close-hover-color)] group-hover:ml-1 group-hover:w-4 group-hover:opacity-100 group-focus-within:ml-1 group-focus-within:w-4 group-focus-within:opacity-100'
+        }`}
         aria-label={`Remove ${countryName}`}
       >
         <span className="text-base leading-none">x</span>
@@ -64,16 +135,38 @@ function SelectedCountryChip({ countryName, onRemove }) {
 }
 
 const SelectedCountryChips = ({ countries, onRemove }) => {
+  const isCompactLayout = useCompactLayout()
+  const [expandedCountryName, setExpandedCountryName] = useState('')
+
+  useEffect(() => {
+    if (!isCompactLayout) {
+      setExpandedCountryName('')
+    }
+  }, [isCompactLayout])
+
+  useEffect(() => {
+    if (!countries.some((country) => country.name === expandedCountryName)) {
+      setExpandedCountryName('')
+    }
+  }, [countries, expandedCountryName])
+
   if (countries.length === 0) {
     return null
   }
 
   return (
-    <div className="flex flex-wrap gap-3" aria-label="Selected countries">
+    <div className="flex flex-wrap gap-2 sm:gap-3" aria-label="Selected countries">
       {countries.map((country) => (
         <SelectedCountryChip
           key={country.name}
           countryName={country.name}
+          isCompactLayout={isCompactLayout}
+          isExpanded={expandedCountryName === country.name}
+          onExpand={(countryValue) =>
+            setExpandedCountryName((currentCountryName) =>
+              currentCountryName === countryValue ? '' : countryValue
+            )
+          }
           onRemove={onRemove}
         />
       ))}

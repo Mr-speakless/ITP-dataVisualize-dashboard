@@ -16,16 +16,16 @@
   --color-grey-bg: #f3f5f7;
   --color-white: #ffffff;
 
-  --text-display: 5rem;
-  --text-display--line-height: 1.25;
-  --text-h2: 1.75rem;
+  --text-display: clamp(2.5rem, 9vw, 3.4rem);
+  --text-display--line-height: 1.05;
+  --text-h2: 1.2rem;
   --text-h2--line-height: 1.083;
-  --text-body: 1.25rem;
-  --text-body--line-height: 1;
-  --text-topbar: 1.0817rem;
+  --text-body: 0.95rem;
+  --text-body--line-height: 1.2;
+  --text-topbar: 0.85rem;
   --text-topbar--line-height: 1;
-  --text-small-label: 1rem;
-  --text-small-label--line-height: 1.083;
+  --text-small-label: 0.8rem;
+  --text-small-label--line-height: 1.2;
 
   --radius-panel: 1.5rem;
   --radius-block: 1rem;
@@ -41,6 +41,7 @@
 
   html {
     background: var(--color-grey-bg);
+    overflow-x: hidden;
   }
 
   body {
@@ -51,6 +52,7 @@
     font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    overflow-x: hidden;
   }
 
   #root {
@@ -62,6 +64,19 @@
   select,
   textarea {
     font: inherit;
+  }
+}
+
+@media (min-width: 640px) {
+  :root {
+    --text-display: 5rem;
+    --text-display--line-height: 1.25;
+    --text-h2: 1.75rem;
+    --text-body: 1.25rem;
+    --text-body--line-height: 1;
+    --text-topbar: 1.0817rem;
+    --text-small-label: 1rem;
+    --text-small-label--line-height: 1.083;
   }
 }
 

@@ -11,7 +11,7 @@ const DataFilterBar = ({
 }) => {
   return (
     <div
-      className="relative isolate flex items-center justify-end"
+      className="relative isolate flex w-full items-center justify-stretch sm:w-auto sm:justify-end md:w-[460px]"
       style={{ zIndex: 3000 }}
       data-name="DataFilterBar"
       data-node-id="79:645"
@@ -19,7 +19,7 @@ const DataFilterBar = ({
       <button
         type="button"
         onClick={() => onToggleSidebar?.(!isSidebarOpen)}
-        className={`${buttonBaseClassName} ${
+        className={`w-full sm:w-auto md:w-full ${buttonBaseClassName} ${
           isSidebarOpen
             ? 'border-theme bg-theme text-white'
             : 'border-grey bg-white text-black hover:border-theme hover:bg-theme hover:text-white'
@@ -27,18 +27,18 @@ const DataFilterBar = ({
         aria-pressed={isSidebarOpen}
         data-node-id="79:662"
       >
-        <span className="flex items-center justify-center gap-2 p-3" data-node-id="79:663">
+          <span className="flex w-full items-center justify-center gap-2 p-3" data-node-id="79:663">
           <span
-            className="h-5 w-5 text-current [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current"
+            className="h-4 w-4 text-current sm:h-5 sm:w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current"
             aria-hidden="true"
             data-node-id="79:664"
             dangerouslySetInnerHTML={{ __html: editIcon }}
           />
           <span
-            className="ty-body whitespace-nowrap leading-none text-current"
-            data-node-id="79:665"
-          >
-            Edit Countries and regions
+              className="ty-small whitespace-nowrap leading-none text-current sm:text-[var(--text-body)] sm:font-normal"
+              data-node-id="79:665"
+            >
+              Edit Countries and regions
           </span>
         </span>
       </button>

@@ -247,125 +247,135 @@ export default function TimeProgressBar({
 
   return (
     <div
-      className="relative flex w-full items-center gap-3 rounded-[14px] bg-[var(--color-grey-bg)] px-4 py-3"
+      className="relative flex w-full flex-col gap-3 rounded-[14px] bg-[var(--color-grey-bg)] px-3 py-3 sm:grid sm:grid-cols-[auto_132px_minmax(0,1fr)_132px] sm:items-center sm:gap-3 sm:px-4"
       style={{ zIndex: 1 }}
     >
-      <button
-        type="button"
-        onClick={handlePlayToggle}
-        disabled={boundedDates.length === 0}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] transition-colors duration-150 ${
-          isPlaying
-            ? 'bg-[var(--color-theme)]'
-            : 'bg-[var(--color-cold-grey)] hover:bg-[var(--color-medium-grey)] active:bg-[var(--color-theme)]'
-        } disabled:cursor-not-allowed disabled:bg-[var(--color-medium-grey)]`}
-        aria-label={isPlaying ? 'Pause time progress' : 'Play time progress'}
-      >
-        <img
-          src={isPlaying ? pauseIcon : playButtonIcon}
-          alt=""
-          className="h-[18px] w-[18px]"
-        />
-      </button>
-
-      <label className="group flex h-10 w-[132px] shrink-0 items-center justify-center rounded-[6px] px-2 transition-colors duration-150 hover:bg-[var(--color-cold-grey)]/35 focus-within:bg-[var(--color-cold-grey)]/35">
-        <input
-          type="text"
-          inputMode="text"
-          value={startDateInput}
-          onChange={(event) => setStartDateInput(String(event.target.value ?? '').slice(0, 10))}
-          onBlur={handleStartDateCommit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur()
-            }
-          }}
-          className="ty-small w-full bg-transparent text-center text-black outline-none"
-          aria-label="Timeline start date"
-          placeholder="2020-01-01"
-        />
-      </label>
-
-      <div
-        className="relative flex h-10 min-w-0 flex-1 items-center overflow-visible"
-        onPointerDown={handleTrackPointerDown}
-      >
-        <div
-          ref={trackRef}
-          className="absolute inset-y-0 overflow-visible"
-          style={{ left: `${handleInset}px`, right: `${handleInset}px` }}
+      <div className="flex w-full items-center gap-3 sm:contents">
+        <button
+          type="button"
+          onClick={handlePlayToggle}
+          disabled={boundedDates.length === 0}
+          className={`order-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] transition-colors duration-150 ${
+            isPlaying
+              ? 'bg-[var(--color-theme)]'
+              : 'bg-[var(--color-cold-grey)] hover:bg-[var(--color-medium-grey)] active:bg-[var(--color-theme)]'
+          } disabled:cursor-not-allowed disabled:bg-[var(--color-medium-grey)] sm:order-1`}
+          aria-label={isPlaying ? 'Pause time progress' : 'Play time progress'}
         >
-          <div className="absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--color-medium-grey)]" />
-          <div
-            className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--color-theme)]"
-            style={{ width: `${trackProgress * 100}%` }}
+          <img
+            src={isPlaying ? pauseIcon : playButtonIcon}
+            alt=""
+            className="h-[18px] w-[18px]"
           />
+        </button>
+
+        <div
+          className="order-2 relative flex h-10 min-w-0 flex-1 items-center overflow-visible sm:order-3"
+          onPointerDown={handleTrackPointerDown}
+        >
           <div
-            className="absolute inset-y-0 flex items-center"
-            style={{
-              left: `${trackProgress * 100}%`,
-              transform:
-                isHandleHovered && !isDragging
-                  ? 'translateX(-50%) scale(1.08)'
-                  : 'translateX(-50%) scale(1)',
-              filter:
-                isHandleHovered && !isDragging
-                  ? 'drop-shadow(0 6px 12px rgba(0, 119, 159, 0.28))'
-                  : 'none',
-            }}
+            ref={trackRef}
+            className="absolute inset-y-0 overflow-visible"
+            style={{ left: `${handleInset}px`, right: `${handleInset}px` }}
           >
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                setIsDragging(true)
+            <div className="absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--color-medium-grey)]" />
+            <div
+              className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--color-theme)]"
+              style={{ width: `${trackProgress * 100}%` }}
+            />
+            <div
+              className="absolute inset-y-0 flex items-center"
+              style={{
+                left: `${trackProgress * 100}%`,
+                transform:
+                  isHandleHovered && !isDragging
+                    ? 'translateX(-50%) scale(1.08)'
+                    : 'translateX(-50%) scale(1)',
+                filter:
+                  isHandleHovered && !isDragging
+                    ? 'drop-shadow(0 6px 12px rgba(0, 119, 159, 0.28))'
+                    : 'none',
               }}
-              onMouseEnter={() => setIsHandleHovered(true)}
-              onMouseLeave={() => setIsHandleHovered(false)}
-              onKeyDown={(event) => {
-                if (boundedDates.length === 0) {
-                  return
-                }
-
-                if (event.key === 'ArrowLeft') {
-                  event.preventDefault()
-                  const nextIndex = Math.max(currentIndex - 1, 0)
-                  onValueDateChange?.(boundedDates[nextIndex])
-                }
-
-                if (event.key === 'ArrowRight') {
-                  event.preventDefault()
-                  const nextIndex = Math.min(currentIndex + 1, boundedDates.length - 1)
-                  onValueDateChange?.(boundedDates[nextIndex])
-                }
-              }}
-              className="flex h-10 w-10 items-center justify-center border-0 bg-transparent p-0 outline-none"
-              aria-label={`Current timeline date ${safeValueDate || endDate}`}
             >
-              <img src={virusIcon} alt="" className="block h-9 w-9" draggable="false" />
-            </button>
+              <button
+                type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setIsDragging(true)
+                }}
+                onMouseEnter={() => setIsHandleHovered(true)}
+                onMouseLeave={() => setIsHandleHovered(false)}
+                onKeyDown={(event) => {
+                  if (boundedDates.length === 0) {
+                    return
+                  }
+
+                  if (event.key === 'ArrowLeft') {
+                    event.preventDefault()
+                    const nextIndex = Math.max(currentIndex - 1, 0)
+                    onValueDateChange?.(boundedDates[nextIndex])
+                  }
+
+                  if (event.key === 'ArrowRight') {
+                    event.preventDefault()
+                    const nextIndex = Math.min(currentIndex + 1, boundedDates.length - 1)
+                    onValueDateChange?.(boundedDates[nextIndex])
+                  }
+                }}
+                className="flex h-10 w-10 items-center justify-center border-0 bg-transparent p-0 outline-none"
+                aria-label={`Current timeline date ${safeValueDate || endDate}`}
+              >
+                <img src={virusIcon} alt="" className="block h-9 w-9" draggable="false" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <label className="group flex h-10 w-[132px] shrink-0 items-center justify-center rounded-[6px] px-2 transition-colors duration-150 hover:bg-[var(--color-cold-grey)]/35 focus-within:bg-[var(--color-cold-grey)]/35">
-        <input
-          type="text"
-          inputMode="text"
-          value={endDateInput}
-          onChange={(event) => setEndDateInput(String(event.target.value ?? '').slice(0, 10))}
-          onBlur={handleEndDateCommit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur()
-            }
-          }}
-          className="ty-small w-full bg-transparent text-center text-black outline-none"
-          aria-label="Timeline end date"
-          placeholder="2023-03-09"
-        />
-      </label>
+      <div className="grid w-full grid-cols-2 gap-3 sm:contents">
+        <div className="order-3 flex items-center gap-2 sm:order-2 sm:block">
+          <span className="ty-small shrink-0 text-dark-grey sm:hidden">From:</span>
+          <label className="group flex h-10 w-full items-center justify-center rounded-[6px] border border-grey bg-white px-2 transition-colors duration-150 hover:bg-white focus-within:bg-white sm:w-[132px] sm:shrink-0">
+            <input
+              type="text"
+              inputMode="text"
+              value={startDateInput}
+              onChange={(event) => setStartDateInput(String(event.target.value ?? '').slice(0, 10))}
+              onBlur={handleStartDateCommit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur()
+                }
+              }}
+              className="ty-small w-full bg-transparent text-center text-black outline-none"
+              aria-label="Timeline start date"
+              placeholder="2020-01-01"
+            />
+          </label>
+        </div>
+
+        <div className="order-4 flex items-center gap-2 sm:order-4 sm:block">
+          <span className="ty-small shrink-0 text-dark-grey sm:hidden">To:</span>
+          <label className="group flex h-10 w-full items-center justify-center rounded-[6px] border border-grey bg-white px-2 transition-colors duration-150 hover:bg-white focus-within:bg-white sm:w-[132px] sm:shrink-0">
+            <input
+              type="text"
+              inputMode="text"
+              value={endDateInput}
+              onChange={(event) => setEndDateInput(String(event.target.value ?? '').slice(0, 10))}
+              onBlur={handleEndDateCommit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur()
+                }
+              }}
+              className="ty-small w-full bg-transparent text-center text-black outline-none"
+              aria-label="Timeline end date"
+              placeholder="2023-03-09"
+            />
+          </label>
+        </div>
+      </div>
     </div>
   )
 }

@@ -26,14 +26,22 @@ const controlGroups = [
 ]
 
 const containerClassName =
-  'flex items-center gap-1 rounded-[4px] bg-grey-bg p-1'
+  'flex min-w-0 flex-1 items-center gap-px rounded-[4px] bg-grey-bg p-[3px] md:flex-none md:gap-1 md:p-1'
 
 const itemBaseClassName =
-  'rounded-[4px] px-2 py-2 transition-colors duration-150'
+  'min-w-0 flex-1 rounded-[4px] px-1 py-2 transition-colors duration-150 md:flex-none md:px-2'
 
 function ToggleGroup({ group, value, onChange }) {
+  const groupWidthClassName =
+    group.key === 'scale'
+      ? 'flex-[1.2] md:flex-none'
+      : 'flex-1 md:flex-none'
+
   return (
-    <div className={containerClassName} data-node-id={group.wrapperNodeId}>
+    <div
+      className={`${containerClassName} ${groupWidthClassName}`}
+      data-node-id={group.wrapperNodeId}
+    >
       {group.options.map((option) => {
         const isActive = option.value === value
 
@@ -50,7 +58,9 @@ function ToggleGroup({ group, value, onChange }) {
             aria-pressed={isActive}
             data-node-id={isActive ? option.activeNodeId : option.inactiveNodeId}
           >
-            <span className="ty-body whitespace-nowrap leading-none">{option.label}</span>
+            <span className="ty-small block whitespace-nowrap text-center leading-none md:text-[1.1rem]">
+              {option.label}
+            </span>
           </button>
         )
       })}
@@ -60,7 +70,7 @@ function ToggleGroup({ group, value, onChange }) {
 
 const ViewSwitcher = ({ value, onChange }) => {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3">
+    <div className="flex w-full flex-nowrap items-center gap-1 md:w-auto md:gap-3">
       {controlGroups.map((group) => (
         <ToggleGroup
           key={group.key}
