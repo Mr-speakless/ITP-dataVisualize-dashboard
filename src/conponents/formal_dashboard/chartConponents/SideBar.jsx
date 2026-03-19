@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ascendingIcon from '../../../assets/ascendingIcon.svg?raw'
 import descendingIcon from '../../../assets/descendingIcon.svg?raw'
+import expendIcon from '../../../assets/ExpendIcon.svg?raw'
 import resetDataIcon from '../../../assets/ResetData.svg?raw'
 import searchIcon from '../../../assets/searchIcon.svg?raw'
 import sortIcon from '../../../assets/sortIcon.svg?raw'
@@ -71,6 +72,7 @@ function CountryRow({
 const SideBar = ({
   isOpen,
   onClose,
+  mobileLayout,
   selectedDate,
   onDateChange,
   searchQuery,
@@ -94,11 +96,18 @@ const SideBar = ({
   const sortDirectionIcon = sortDirection === 'asc' ? ascendingIcon : descendingIcon
   const sortDirectionLabel = sortDirection === 'asc' ? 'Ascending order' : 'Descending order'
   const sortLabel = sortMode === 'per-100k' ? 'Per 100k' : 'Total'
+  const sidebarStyle = {
+    '--sidebar-mobile-left': `${mobileLayout?.left ?? 0}px`,
+    '--sidebar-mobile-width': mobileLayout?.width
+      ? `${mobileLayout.width}px`
+      : 'calc(100vw - 2rem)',
+    zIndex: 3001,
+  }
 
   return (
     <aside
-      className="absolute left-0 right-0 top-[calc(100%+12px)] isolate w-full max-w-none opacity-100 sm:left-auto sm:right-0 sm:max-w-[420px] md:max-w-[460px]"
-      style={{ zIndex: 3001 }}
+      className="absolute left-[var(--sidebar-mobile-left)] top-[calc(100%+12px)] isolate w-[var(--sidebar-mobile-width)] max-w-[var(--sidebar-mobile-width)] opacity-100 md:left-auto md:right-0 md:w-full md:max-w-[460px]"
+      style={sidebarStyle}
     >
       <div
         className="flex max-h-[min(70vh,560px)] flex-col gap-3 overflow-hidden rounded-[4px] border border-grey bg-white px-4 py-3 text-black opacity-100 shadow-[0_0_4px_0_rgba(0,0,0,0.25)]"
@@ -180,8 +189,11 @@ const SideBar = ({
               <option value="total">Sort by Total</option>
               <option value="per-100k">Sort by Per 100k</option>
             </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ty-small text-[var(--color-dark-grey)] opacity-100">
-              v
+            <span
+              className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-dark-grey)] opacity-100 [&>svg]:h-full [&>svg]:w-full [&>svg]:stroke-current [&>svg]:fill-none"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: expendIcon }}
+            >
             </span>
           </div>
 

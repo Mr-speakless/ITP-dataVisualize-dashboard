@@ -1,3 +1,5 @@
+import expendIcon from '../../../assets/ExpendIcon.svg?raw'
+
 const controlGroups = [
   {
     key: 'metric',
@@ -24,6 +26,10 @@ const controlGroups = [
     ],
   },
 ]
+
+function getMobileSelectClassName(groupKey) {
+  return `ty-small h-7 w-full appearance-none border-0 bg-transparent pl-0 pr-4 text-black outline-none`
+}
 
 const containerClassName =
   'flex min-w-0 flex-1 items-center gap-px rounded-[4px] bg-grey-bg p-[3px] md:flex-none md:gap-1 md:p-1'
@@ -68,23 +74,66 @@ function ToggleGroup({ group, value, onChange }) {
   )
 }
 
+function MobileSelectGroup({ group, value, onChange }) {
+  return (
+    <label className="relative w-full min-w-0 border-b border-grey pb-0.5">
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={getMobileSelectClassName(group.key)}
+        aria-label={group.key}
+      >
+        {group.options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span
+        className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-dark-grey [&>svg]:h-full [&>svg]:w-full [&>svg]:stroke-current [&>svg]:fill-none"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: expendIcon }}
+      >
+      </span>
+    </label>
+  )
+}
+
 const ViewSwitcher = ({ value, onChange }) => {
   return (
-    <div className="flex w-full flex-nowrap items-center gap-1 md:w-auto md:gap-3">
-      {controlGroups.map((group) => (
-        <ToggleGroup
-          key={group.key}
-          group={group}
-          value={value[group.key]}
-          onChange={(nextValue) =>
-            onChange({
-              ...value,
-              [group.key]: nextValue,
-            })
-          }
-        />
-      ))}
-    </div>
+    <>
+      <div className="contents md:hidden">
+        {controlGroups.map((group) => (
+          <MobileSelectGroup
+            key={`mobile-${group.key}`}
+            group={group}
+            value={value[group.key]}
+            onChange={(nextValue) =>
+              onChange({
+                ...value,
+                [group.key]: nextValue,
+              })
+            }
+          />
+        ))}
+      </div>
+
+      <div className="hidden w-full flex-nowrap items-center gap-1 md:flex md:w-auto md:gap-3">
+        {controlGroups.map((group) => (
+          <ToggleGroup
+            key={group.key}
+            group={group}
+            value={value[group.key]}
+            onChange={(nextValue) =>
+              onChange({
+                ...value,
+                [group.key]: nextValue,
+              })
+            }
+          />
+        ))}
+      </div>
+    </>
   )
 }
 

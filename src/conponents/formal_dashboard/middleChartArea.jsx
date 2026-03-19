@@ -89,6 +89,7 @@ const MiddleChartArea = () => {
   const [error, setError] = useState('')
   const [seriesError, setSeriesError] = useState('')
   const pendingMapDatesRef = useRef(new Set())
+  const controlsRowRef = useRef(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -484,11 +485,15 @@ const MiddleChartArea = () => {
         <ChartViewToggle value={chart} onChange={setChart} />
 
         <div className="flex w-full max-w-[1200px] flex-col gap-4 rounded-xl p-4 shadow-[0_0_8px_0_rgba(0,0,0,0.15)] sm:gap-5 sm:p-5">
-          <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div
+            ref={controlsRowRef}
+            className="grid w-full grid-cols-4 items-center gap-2 md:flex md:flex-row md:items-center md:justify-between"
+          >
             <ViewSwitcher value={displayMode} onChange={setDisplayMode} />
             <DataFilterBar
               isSidebarOpen={isSidebarOpen}
               onToggleSidebar={setIsSidebarOpen}
+              sidebarAnchorRef={controlsRowRef}
               sidebarProps={{
                 selectedDate,
                 onDateChange: setSelectedDate,

@@ -1,17 +1,68 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import editIcon from '../../../assets/editIcon.svg?raw'
 import SideBar from './SideBar.jsx'
 
 const buttonBaseClassName =
-  'group inline-flex items-center rounded-[4px] border-2 opacity-100 transition-colors duration-150'
+  'group inline-flex items-center opacity-100 transition-colors duration-150'
 
 const DataFilterBar = ({
   isSidebarOpen = false,
   onToggleSidebar,
+  sidebarAnchorRef,
   sidebarProps,
 }) => {
+  const containerRef = useRef(null)
+  const [sidebarLayout, setSidebarLayout] = useState(null)
+
+  const updateSidebarLayout = useCallback(() => {
+    const containerElement = containerRef.current
+    const anchorElement = sidebarAnchorRef?.current
+
+    if (!containerElement || !anchorElement) {
+      setSidebarLayout(null)
+      return
+    }
+
+    const containerRect = containerElement.getBoundingClientRect()
+    const anchorRect = anchorElement.getBoundingClientRect()
+
+    setSidebarLayout({
+      left: anchorRect.left - containerRect.left,
+      width: anchorRect.width,
+    })
+  }, [sidebarAnchorRef])
+
+  useEffect(() => {
+    updateSidebarLayout()
+
+    const containerElement = containerRef.current
+    const anchorElement = sidebarAnchorRef?.current
+
+    if (!containerElement || !anchorElement || typeof ResizeObserver === 'undefined') {
+      return undefined
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSidebarLayout()
+    })
+
+    resizeObserver.observe(containerElement)
+    resizeObserver.observe(anchorElement)
+
+    window.addEventListener('resize', updateSidebarLayout)
+    window.addEventListener('scroll', updateSidebarLayout, true)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateSidebarLayout)
+      window.removeEventListener('scroll', updateSidebarLayout, true)
+    }
+  }, [sidebarAnchorRef, updateSidebarLayout, isSidebarOpen])
+
   return (
     <div
-      className="relative isolate flex w-full items-center justify-stretch sm:w-auto sm:justify-end md:w-[460px]"
+      ref={containerRef}
+      className="relative isolate flex w-full min-w-0 items-center justify-end md:w-[460px] md:shrink-0"
       style={{ zIndex: 3000 }}
       data-name="DataFilterBar"
       data-node-id="79:645"
@@ -19,32 +70,39 @@ const DataFilterBar = ({
       <button
         type="button"
         onClick={() => onToggleSidebar?.(!isSidebarOpen)}
-        className={`w-full sm:w-auto md:w-full ${buttonBaseClassName} ${
+        className={`w-full ${buttonBaseClassName} ${
           isSidebarOpen
-            ? 'border-theme bg-theme text-white'
-            : 'border-grey bg-white text-black hover:border-theme hover:bg-theme hover:text-white'
+            ? 'text-theme md:rounded-[4px] md:border-2 md:border-theme md:bg-theme md:text-white'
+            : 'text-black md:rounded-[4px] md:border-2 md:border-grey md:bg-white md:hover:border-theme md:hover:bg-theme md:hover:text-white'
         }`}
         aria-pressed={isSidebarOpen}
         data-node-id="79:662"
       >
-          <span className="flex w-full items-center justify-center gap-2 p-3" data-node-id="79:663">
+          <span className="flex h-7 w-full items-center justify-center gap-1 border-b border-grey md:h-auto md:gap-2 md:border-0 md:px-2.5 md:py-2" data-node-id="79:663">
           <span
-            className="h-4 w-4 text-current sm:h-5 sm:w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current"
+            className="h-4 w-4 text-current md:h-5 md:w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current"
             aria-hidden="true"
             data-node-id="79:664"
             dangerouslySetInnerHTML={{ __html: editIcon }}
           />
           <span
-              className="ty-small whitespace-nowrap leading-none text-current sm:text-[var(--text-body)] sm:font-normal"
-              data-node-id="79:665"
-            >
-              Edit Countries and regions
+            className="ty-small whitespace-nowrap leading-none text-current md:hidden"
+            data-node-id="79:665"
+          >
+            Edit
+          </span>
+          <span
+            className="hidden whitespace-nowrap leading-none text-current md:inline md:text-[var(--text-body)] md:font-normal"
+            data-node-id="79:665"
+          >
+            Edit Countries and regions
           </span>
         </span>
       </button>
       <SideBar
         isOpen={isSidebarOpen}
         onClose={() => onToggleSidebar?.(false)}
+        mobileLayout={sidebarLayout}
         {...sidebarProps}
       />
     </div>
