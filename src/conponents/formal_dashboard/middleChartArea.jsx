@@ -82,6 +82,37 @@ function resolveNearestAvailableDate(meta, targetDate) {
   return latestBeforeTarget ?? availableDates[availableDates.length - 1]
 }
 
+function buildExpandedSelectionScope({
+  expandedCountryName,
+  expandedCountryRows,
+  expandedSubregionName,
+  expandedSubregionRows,
+}) {
+  if (!expandedCountryName) {
+    return null
+  }
+
+  if (expandedSubregionName) {
+    return new Set([
+      expandedCountryName,
+      expandedSubregionName,
+      ...(Array.isArray(expandedSubregionRows) ? expandedSubregionRows : []).map(
+        (region) => region.name
+      ),
+    ])
+  }
+
+  return new Set([
+    expandedCountryName,
+    ...(Array.isArray(expandedCountryRows) ? expandedCountryRows : []).map(
+      (region) => region.name
+    ),
+    ...(Array.isArray(expandedSubregionRows) ? expandedSubregionRows : []).map(
+      (region) => region.name
+    ),
+  ])
+}
+
 const MiddleChartArea = () => {
   const [chart, setChart] = useState(true)
   const [displayMode, setDisplayMode] = useState(initialDisplayMode)
@@ -499,13 +530,14 @@ const MiddleChartArea = () => {
 
     setSelectedCountries((currentSelection) => {
       if (expandedCountryName) {
-        const expandedCountryRowNames = new Set([
+        const expandedSelectionScope = buildExpandedSelectionScope({
           expandedCountryName,
-          ...sortedExpandedCountryRows.map((country) => country.name),
-          ...sortedExpandedSubregionRows.map((country) => country.name),
-        ])
+          expandedCountryRows: sortedExpandedCountryRows,
+          expandedSubregionName,
+          expandedSubregionRows: sortedExpandedSubregionRows,
+        })
         const availableExpandedSelection = currentSelection.filter((name) =>
-          expandedCountryRowNames.has(name)
+          expandedSelectionScope?.has(name)
         )
 
         if (availableExpandedSelection.length > 0) {
@@ -532,6 +564,7 @@ const MiddleChartArea = () => {
     countries,
     displayMode.metric,
     expandedCountryName,
+    expandedSubregionName,
     sortedExpandedCountryRows,
     sortedExpandedSubregionRows,
     sortMode,
@@ -575,13 +608,14 @@ const MiddleChartArea = () => {
           : countryRowsByName.get(regionName)
 
       if (expandedCountryName) {
-        const allowedNames = new Set([
+        const allowedNames = buildExpandedSelectionScope({
           expandedCountryName,
-          ...sortedExpandedCountryRows.map((country) => country.name),
-          ...sortedExpandedSubregionRows.map((country) => country.name),
-        ])
+          expandedCountryRows: sortedExpandedCountryRows,
+          expandedSubregionName,
+          expandedSubregionRows: sortedExpandedSubregionRows,
+        })
 
-        if (!allowedNames.has(regionName)) {
+        if (!allowedNames?.has(regionName)) {
           return currentSelection
         }
       }
@@ -841,21 +875,10 @@ const MiddleChartArea = () => {
                         : subregionName
 
                     if (nextExpandedSubregionName) {
-                      setSelectedCountries((currentSelection) =>
-                        Array.from(
-                          new Set([
-                            expandedCountryName,
-                            nextExpandedSubregionName,
-                            ...currentSelection.filter((name) =>
-                              sortedExpandedSubregionRows.some(
-                                (row) =>
-                                  row.parentRegionName === nextExpandedSubregionName &&
-                                  row.name === name
-                              )
-                            ),
-                          ])
-                        )
-                      )
+                      setSelectedCountries([
+                        expandedCountryName,
+                        nextExpandedSubregionName,
+                      ].filter(Boolean))
                     } else {
                       setSelectedCountries((currentSelection) =>
                         currentSelection.filter(
@@ -934,7 +957,9 @@ const MiddleChartArea = () => {
             <WorldProjectionMap
               countries={mapCountries}
               regionalCountries={sortedExpandedCountryRows}
+              subregionalCountries={sortedExpandedSubregionRows}
               focusedCountryName={expandedCountryName}
+              focusedSubregionName={expandedSubregionName}
               displayMode={displayMode}
               selectedCountries={selectedCountries}
               timelineDate={mapDisplayDate}

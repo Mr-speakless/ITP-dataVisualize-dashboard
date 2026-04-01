@@ -32,15 +32,161 @@ import {
 } from '../worldData.js'
 import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFlags.js'
 
+const usaMapRawByModulePath = import.meta.glob('../../../assets/USAmap/*.svg', {
+  eager: true,
+  import: 'default',
+  query: '?raw',
+})
+
 const heatScaleColors = ['#eaf6fb', '#c4e0ed', '#87bfd4', '#3a88a8', '#0b4662']
 const noDataFillColor = '#dde7ec'
 const mapSvgClassName = 'world-projection-map-svg'
+const fittedSvgByRawMarkup = new Map()
 
 function prepareMapSvg(svgRaw = '') {
   return String(svgRaw ?? '')
     .replace(/<\?xml[\s\S]*?\?>/i, '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/viewbox=/i, 'viewBox=')
+}
+
+function removeSvgRootSizingAttributes(svgAttributes = '') {
+  return String(svgAttributes ?? '').replace(
+    /\s(?:class|width|height|preserveAspectRatio)\s*=\s*(['"]).*?\1/gi,
+    ''
+  )
+}
+
+function fitSvgViewportToDrawableBounds(svgMarkup = '') {
+  const normalizedSvgMarkup = String(svgMarkup ?? '').trim()
+
+  if (!normalizedSvgMarkup) {
+    return normalizedSvgMarkup
+  }
+
+  if (fittedSvgByRawMarkup.has(normalizedSvgMarkup)) {
+    return fittedSvgByRawMarkup.get(normalizedSvgMarkup)
+  }
+
+  if (typeof document === 'undefined') {
+    fittedSvgByRawMarkup.set(normalizedSvgMarkup, normalizedSvgMarkup)
+    return normalizedSvgMarkup
+  }
+
+  let fittedSvgMarkup = normalizedSvgMarkup
+  let measurementRoot = null
+
+  try {
+    measurementRoot = document.createElement('div')
+    measurementRoot.style.position = 'fixed'
+    measurementRoot.style.left = '-10000px'
+    measurementRoot.style.top = '-10000px'
+    measurementRoot.style.width = '0'
+    measurementRoot.style.height = '0'
+    measurementRoot.style.visibility = 'hidden'
+    measurementRoot.style.pointerEvents = 'none'
+    measurementRoot.innerHTML = normalizedSvgMarkup
+    document.body.appendChild(measurementRoot)
+
+    const svgElement = measurementRoot.querySelector('svg')
+
+    if (svgElement) {
+      const preferredDrawableElements = svgElement.querySelectorAll(
+        'path[id], path[name], path[title], path[class], polygon[id], polygon[name], polygon[title], polygon[class], polyline[id], polyline[name], polyline[title], polyline[class], rect[id], rect[name], rect[title], rect[class], circle[id], circle[name], circle[title], circle[class], ellipse[id], ellipse[name], ellipse[title], ellipse[class], line[id], line[name], line[title], line[class]'
+      )
+      const fallbackDrawableElements = svgElement.querySelectorAll(
+        'path, polygon, polyline, rect, circle, ellipse, line'
+      )
+      const drawableElements =
+        preferredDrawableElements.length > 0
+          ? preferredDrawableElements
+          : fallbackDrawableElements
+      let minX = Number.POSITIVE_INFINITY
+      let minY = Number.POSITIVE_INFINITY
+      let maxX = Number.NEGATIVE_INFINITY
+      let maxY = Number.NEGATIVE_INFINITY
+
+      drawableElements.forEach((element) => {
+        if (element.closest('defs, clipPath, mask, pattern, symbol, marker, metadata')) {
+          return
+        }
+
+        if (
+          element.getAttribute('display') === 'none' ||
+          element.getAttribute('visibility') === 'hidden'
+        ) {
+          return
+        }
+
+        try {
+          const bbox = element.getBBox()
+
+          if (
+            !Number.isFinite(bbox.x) ||
+            !Number.isFinite(bbox.y) ||
+            !Number.isFinite(bbox.width) ||
+            !Number.isFinite(bbox.height)
+          ) {
+            return
+          }
+
+          if (bbox.width <= 0 && bbox.height <= 0) {
+            return
+          }
+
+          minX = Math.min(minX, bbox.x)
+          minY = Math.min(minY, bbox.y)
+          maxX = Math.max(maxX, bbox.x + bbox.width)
+          maxY = Math.max(maxY, bbox.y + bbox.height)
+        } catch {
+          // Ignore non-renderable elements while calculating drawable bounds.
+        }
+      })
+
+      const boundsWidth = maxX - minX
+      const boundsHeight = maxY - minY
+
+      if (
+        Number.isFinite(boundsWidth) &&
+        Number.isFinite(boundsHeight) &&
+        boundsWidth > 0 &&
+        boundsHeight > 0
+      ) {
+        const paddingX = Math.max(boundsWidth * 0.035, 0.5)
+        const paddingY = Math.max(boundsHeight * 0.035, 0.5)
+        const fittedWidth = boundsWidth + paddingX * 2
+        const fittedHeight = boundsHeight + paddingY * 2
+        const originalAspectRatio = extractSvgAspectRatio(normalizedSvgMarkup)
+        const fittedAspectRatio = fittedWidth / fittedHeight
+        const aspectRatioShift = originalAspectRatio > 0 ? fittedAspectRatio / originalAspectRatio : 1
+
+        if (aspectRatioShift < 0.28 || aspectRatioShift > 3.6) {
+          throw new Error('Discarding unstable fitted viewBox bounds.')
+        }
+
+        const fittedViewBox = [
+          minX - paddingX,
+          minY - paddingY,
+          fittedWidth,
+          fittedHeight,
+        ]
+          .map((value) => Number(value.toFixed(4)))
+          .join(' ')
+
+        svgElement.setAttribute('viewBox', fittedViewBox)
+        svgElement.removeAttribute('width')
+        svgElement.removeAttribute('height')
+        fittedSvgMarkup = svgElement.outerHTML
+      }
+    }
+  } catch {
+    fittedSvgMarkup = normalizedSvgMarkup
+  } finally {
+    measurementRoot?.remove()
+  }
+
+  fittedSvgByRawMarkup.set(normalizedSvgMarkup, fittedSvgMarkup)
+  return fittedSvgMarkup
 }
 
 const preparedWorldMapSvg = prepareMapSvg(worldMapSvg)
@@ -76,6 +222,23 @@ const preparedRegionalMapSvgByCountryName = Object.entries(regionalMapRawByCount
     return accumulator
   },
   {}
+)
+const preparedUsaMapSvgByFileName = Object.entries(usaMapRawByModulePath).reduce(
+  (accumulator, [modulePath, svgRaw]) => {
+    const fileName = String(modulePath ?? '').split('/').pop()
+
+    if (!fileName) {
+      return accumulator
+    }
+
+    accumulator[fileName.toLowerCase()] = prepareMapSvg(svgRaw)
+    return accumulator
+  },
+  {}
+)
+const preparedUsaMapSvg = preparedUsaMapSvgByFileName['usa.svg'] ?? null
+const preparedUsaMapSvgByStateCode = buildPreparedUsaMapSvgByStateCode(
+  preparedUsaMapSvgByFileName
 )
 
 const mapNameAliases = {
@@ -257,6 +420,13 @@ const regionalMapNameAliasesByCountry = Object.freeze({
     'zaporizhia oblast': 'zaporizka',
     'zhytomyr oblast': 'zhytomyrska',
   },
+  'United States': {
+    brooklyn: 'kings',
+    'district of columbia': 'washington d c',
+    manhattan: 'new york',
+    onondaga: 'onodaga',
+    'staten island': 'richmond',
+  },
 })
 
 const regionalMapCanonicalDropWords = new Set([
@@ -279,6 +449,62 @@ const regionalMapCanonicalDropWords = new Set([
   'w',
   'p',
 ])
+
+const usaStateCodeByRegionName = Object.freeze({
+  alabama: 'al',
+  alaska: 'ak',
+  arizona: 'az',
+  arkansas: 'ar',
+  california: 'ca',
+  colorado: 'co',
+  connecticut: 'ct',
+  delaware: 'de',
+  'district of columbia': 'dc',
+  florida: 'fl',
+  georgia: 'ga',
+  hawaii: 'hi',
+  idaho: 'id',
+  illinois: 'il',
+  indiana: 'in',
+  iowa: 'ia',
+  kansas: 'ks',
+  kentucky: 'ky',
+  louisiana: 'la',
+  maine: 'me',
+  maryland: 'md',
+  massachusetts: 'ma',
+  michigan: 'mi',
+  minnesota: 'mn',
+  mississippi: 'ms',
+  missouri: 'mo',
+  montana: 'mt',
+  nebraska: 'ne',
+  nevada: 'nv',
+  'new hampshire': 'nh',
+  'new jersey': 'nj',
+  'new mexico': 'nm',
+  'new york': 'ny',
+  'north carolina': 'nc',
+  'north dakota': 'nd',
+  ohio: 'oh',
+  oklahoma: 'ok',
+  oregon: 'or',
+  pennsylvania: 'pa',
+  'rhode island': 'ri',
+  'south carolina': 'sc',
+  'south dakota': 'sd',
+  tennessee: 'tn',
+  texas: 'tx',
+  utah: 'ut',
+  vermont: 'vt',
+  virginia: 'va',
+  washington: 'wa',
+  'washington dc': 'dc',
+  'washington d c': 'dc',
+  'west virginia': 'wv',
+  wisconsin: 'wi',
+  wyoming: 'wy',
+})
 
 const scalePresetByModeKey = {
   'cases-to-date-total': {
@@ -329,6 +555,39 @@ const normalizedRegionalMapNameAliasesByCountry =
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
+}
+
+function extractSvgAspectRatio(svgMarkup = '') {
+  const svgOpenTagMatch = String(svgMarkup ?? '').match(/<svg\b([^>]*)>/i)
+  const svgAttributes = svgOpenTagMatch?.[1] ?? ''
+  const viewBoxMatch = svgAttributes.match(/\bviewBox="([^"]+)"/i)
+
+  if (viewBoxMatch?.[1]) {
+    const parts = viewBoxMatch[1]
+      .trim()
+      .split(/\s+/)
+      .map((value) => Number(value))
+
+    if (
+      parts.length === 4 &&
+      parts.every((value) => Number.isFinite(value)) &&
+      parts[2] > 0 &&
+      parts[3] > 0
+    ) {
+      return parts[2] / parts[3]
+    }
+  }
+
+  const widthMatch = svgAttributes.match(/\bwidth="([^"]+)"/i)
+  const heightMatch = svgAttributes.match(/\bheight="([^"]+)"/i)
+  const width = Number.parseFloat(widthMatch?.[1] ?? '')
+  const height = Number.parseFloat(heightMatch?.[1] ?? '')
+
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return width / height
+  }
+
+  return 1
 }
 
 function normalizeMapLookupName(value) {
@@ -444,6 +703,63 @@ function buildCountryCodeByMapName() {
   })
 
   return lookup
+}
+
+function getPreferredUsaSubregionMapScore(fileName) {
+  const normalizedFileName = String(fileName ?? '').toLowerCase()
+  const hasVersionSuffix = /\(\d+\)\.svg$/.test(normalizedFileName)
+  return hasVersionSuffix ? 0 : 1
+}
+
+function buildPreparedUsaMapSvgByStateCode(preparedUsaMapsByFileName) {
+  const preparedMapsByStateCode = {}
+
+  Object.entries(preparedUsaMapsByFileName).forEach(([fileName, svgRaw]) => {
+    const normalizedFileName = String(fileName ?? '').toLowerCase()
+    const stateCodeMatch = normalizedFileName.match(
+      /^usa-([a-z]+)(?:\s*\(\d+\))?\.svg$/
+    )
+
+    if (!stateCodeMatch) {
+      return
+    }
+
+    const rawStateCode = stateCodeMatch[1]
+    const stateCode = rawStateCode === 'wdc' ? 'dc' : rawStateCode
+
+    if (stateCode === 'usa') {
+      return
+    }
+
+    const currentEntry = preparedMapsByStateCode[stateCode]
+
+    if (!currentEntry) {
+      preparedMapsByStateCode[stateCode] = {
+        fileName: normalizedFileName,
+        score: getPreferredUsaSubregionMapScore(normalizedFileName),
+        svgRaw,
+      }
+      return
+    }
+
+    const candidateScore = getPreferredUsaSubregionMapScore(normalizedFileName)
+
+    if (candidateScore > currentEntry.score) {
+      preparedMapsByStateCode[stateCode] = {
+        fileName: normalizedFileName,
+        score: candidateScore,
+        svgRaw,
+      }
+    }
+  })
+
+  return Object.entries(preparedMapsByStateCode).reduce(
+    (accumulator, [stateCode, entry]) => {
+      accumulator[stateCode] = entry.svgRaw
+      return accumulator
+    },
+    {}
+  )
 }
 
 function escapeAttributeValue(value) {
@@ -622,8 +938,9 @@ function buildStyledWorldMapSvg(
   legendScale,
   displayMode
 ) {
+  const fittedWorldMapSvg = fitSvgViewportToDrawableBounds(preparedWorldMapSvg)
   const rules = [
-    `.${mapSvgClassName} path { fill: ${noDataFillColor}; stroke: #aeb8be; stroke-width: 0.45; opacity: 0.42; cursor: default; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
+    `.${mapSvgClassName} path { fill: ${noDataFillColor} !important; stroke: #aeb8be !important; stroke-width: 0.45 !important; opacity: 0.42 !important; cursor: default !important; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
   ]
 
   Object.entries(countryByCode).forEach(([countryCode, country]) => {
@@ -643,13 +960,14 @@ function buildStyledWorldMapSvg(
     rules.push(
       `${selectors
         .map((selector) => `.${mapSvgClassName} ${selector}`)
-        .join(', ')} { fill: ${fillColor}; stroke: ${strokeColor}; stroke-width: ${strokeWidth}; opacity: ${opacity}; cursor: ${cursor}; filter: ${filter}; }`
+        .join(', ')} { fill: ${fillColor} !important; stroke: ${strokeColor} !important; stroke-width: ${strokeWidth} !important; opacity: ${opacity} !important; cursor: ${cursor} !important; filter: ${filter}; }`
     )
   })
 
-  return preparedWorldMapSvg.replace(
+  return fittedWorldMapSvg.replace(
     /<svg\b([^>]*)>/i,
-    `<svg$1 class="${mapSvgClassName}"><style>${rules.join('\n')}</style>`
+    (_match, svgAttributes) =>
+      `<svg${removeSvgRootSizingAttributes(svgAttributes)} class="${mapSvgClassName}" preserveAspectRatio="xMidYMid meet"><style>${rules.join('\n')}</style>`
   )
 }
 
@@ -658,28 +976,51 @@ function buildRegionalPathEntries(regionalMapSvg) {
     return []
   }
 
-  const pathNameMatches = [
-    ...regionalMapSvg.matchAll(/<path\b[^>]*\bname="([^"]+)"[^>]*>/g),
-  ]
-  const uniquePathNames = new Set()
+  const uniquePathEntries = new Set()
+  const pathEntries = []
+  const pathTagMatches = [...regionalMapSvg.matchAll(/<path\b[^>]*>/gi)]
+  const supportedAttributes = ['name', 'title', 'id', 'class']
 
-  return pathNameMatches
-    .map((match) => match?.[1])
-    .filter(Boolean)
-    .filter((pathName) => {
-      if (uniquePathNames.has(pathName)) {
-        return false
+  pathTagMatches.forEach((pathTagMatch) => {
+    const pathTag = pathTagMatch?.[0] ?? ''
+
+    supportedAttributes.forEach((attributeName) => {
+      const attributeMatch = pathTag.match(
+        new RegExp(`\\b${attributeName}="([^"]+)"`, 'i')
+      )
+      const attributeValue = attributeMatch?.[1]
+
+      if (!attributeValue) {
+        return
       }
 
-      uniquePathNames.add(pathName)
-      return true
+      const normalizedName = normalizeMapLookupName(attributeValue)
+
+      if (!normalizedName) {
+        return
+      }
+
+      const pathSelector = `path[${attributeName}="${escapeAttributeValue(
+        attributeValue
+      )}"]`
+      const entryKey = `${pathSelector}::${normalizedName}`
+
+      if (uniquePathEntries.has(entryKey)) {
+        return
+      }
+
+      uniquePathEntries.add(entryKey)
+      pathEntries.push({
+        canonicalName: normalizeRegionalCanonicalName(attributeValue),
+        compactName: normalizeRegionalCompactName(attributeValue),
+        normalizedName,
+        pathName: attributeValue,
+        selector: pathSelector,
+      })
     })
-    .map((pathName) => ({
-      pathName,
-      normalizedName: normalizeMapLookupName(pathName),
-      compactName: normalizeRegionalCompactName(pathName),
-      canonicalName: normalizeRegionalCanonicalName(pathName),
-    }))
+  })
+
+  return pathEntries
 }
 
 function buildRegionalPathLookups(pathEntries) {
@@ -731,7 +1072,8 @@ function buildRegionalCountryByNormalizedName(countries) {
   return countriesByNormalizedName
 }
 
-function resolveRegionalPathEntryForCountry(country, pathLookups, focusedCountryName) {
+function resolveRegionalPathEntryForCountry(country, pathLookups, focusedCountryName, options = {}) {
+  const allowApproximateMatch = options.allowApproximateMatch !== false
   const normalizedCountryName = normalizeMapLookupName(country?.name)
 
   if (!normalizedCountryName) {
@@ -769,6 +1111,10 @@ function resolveRegionalPathEntryForCountry(country, pathLookups, focusedCountry
   }
 
   if (!compactCountryName || compactCountryName.length < 4) {
+    return null
+  }
+
+  if (!allowApproximateMatch) {
     return null
   }
 
@@ -810,13 +1156,36 @@ function resolveRegionalPathEntryForCountry(country, pathLookups, focusedCountry
   return null
 }
 
-function buildRegionalCountryBindings(countries, pathLookups, focusedCountryName) {
+function buildRegionalCountryBindings(countries, pathLookups, focusedCountryName, options = {}) {
+  const useUsaStateCodeBinding = options.useUsaStateCodeBinding === true
+  const allowApproximateMatch = options.allowApproximateMatch !== false
+
+  if (useUsaStateCodeBinding) {
+    return countries
+      .map((country) => {
+        const normalizedCountryName = normalizeMapLookupName(country?.name)
+        const stateCode = usaStateCodeByRegionName[normalizedCountryName]
+
+        if (!stateCode) {
+          return null
+        }
+
+        return {
+          country,
+          normalizedPathName: normalizeMapLookupName(`US-${stateCode.toUpperCase()}`),
+          selector: `path[id="US-${stateCode.toUpperCase()}"]`,
+        }
+      })
+      .filter(Boolean)
+  }
+
   return countries
     .map((country) => {
       const matchedPathEntry = resolveRegionalPathEntryForCountry(
         country,
         pathLookups,
-        focusedCountryName
+        focusedCountryName,
+        { allowApproximateMatch }
       )
 
       if (!matchedPathEntry) {
@@ -826,7 +1195,7 @@ function buildRegionalCountryBindings(countries, pathLookups, focusedCountryName
       return {
         country,
         normalizedPathName: matchedPathEntry.normalizedName,
-        selector: `path[name="${escapeAttributeValue(matchedPathEntry.pathName)}"]`,
+        selector: matchedPathEntry.selector,
       }
     })
     .filter(Boolean)
@@ -857,24 +1226,19 @@ function resolveRegionalCountryFromElement(
     return null
   }
 
-  const pathName = element.getAttribute('name')
-  if (pathName) {
-    const normalizedPathName = normalizeMapLookupName(pathName)
-
-    if (
-      normalizedPathName &&
-      countriesByPathNormalizedName.has(normalizedPathName)
-    ) {
-      return countriesByPathNormalizedName.get(normalizedPathName)
-    }
-  }
-
-  const candidateValues = ['name', 'class', 'id']
+  const candidateValues = ['name', 'title', 'id', 'class']
     .map((attributeName) => element.getAttribute(attributeName))
     .filter(Boolean)
 
   for (const candidateValue of candidateValues) {
     const normalizedCandidateValue = normalizeMapLookupName(candidateValue)
+
+    if (
+      normalizedCandidateValue &&
+      countriesByPathNormalizedName.has(normalizedCandidateValue)
+    ) {
+      return countriesByPathNormalizedName.get(normalizedCandidateValue)
+    }
 
     if (normalizedCandidateValue && countriesByNormalizedName.has(normalizedCandidateValue)) {
       return countriesByNormalizedName.get(normalizedCandidateValue)
@@ -896,8 +1260,9 @@ function buildStyledRegionalMapSvg(
     return ''
   }
 
+  const fittedRegionalMapSvg = fitSvgViewportToDrawableBounds(regionalMapSvg)
   const rules = [
-    `.${mapSvgClassName} path { fill: ${noDataFillColor}; stroke: #aeb8be; stroke-width: 0.45; opacity: 0.42; cursor: default; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
+    `.${mapSvgClassName} path { fill: ${noDataFillColor} !important; stroke: #aeb8be !important; stroke-width: 0.45 !important; opacity: 0.42 !important; cursor: default !important; transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease; vector-effect: non-scaling-stroke; }`,
   ]
 
   regionalCountryBindings.forEach(({ country, selector }) => {
@@ -914,13 +1279,14 @@ function buildStyledRegionalMapSvg(
     const filter = isHovered ? 'drop-shadow(0 0 8px rgba(0,0,0,0.24))' : 'none'
 
     rules.push(
-      `.${mapSvgClassName} ${selector} { fill: ${fillColor}; stroke: ${strokeColor}; stroke-width: ${strokeWidth}; opacity: ${opacity}; cursor: ${cursor}; filter: ${filter}; }`
+      `.${mapSvgClassName} ${selector} { fill: ${fillColor} !important; stroke: ${strokeColor} !important; stroke-width: ${strokeWidth} !important; opacity: ${opacity} !important; cursor: ${cursor} !important; filter: ${filter}; }`
     )
   })
 
-  return regionalMapSvg.replace(
+  return fittedRegionalMapSvg.replace(
     /<svg\b([^>]*)>/i,
-    `<svg$1 class="${mapSvgClassName}"><style>${rules.join('\n')}</style>`
+    (_match, svgAttributes) =>
+      `<svg${removeSvgRootSizingAttributes(svgAttributes)} class="${mapSvgClassName}" preserveAspectRatio="xMidYMid meet"><style>${rules.join('\n')}</style>`
   )
 }
 
@@ -935,7 +1301,9 @@ function buildDisplayModeLabel(displayMode) {
 export default function WorldProjectionMap({
   countries = [],
   regionalCountries = [],
+  subregionalCountries = [],
   focusedCountryName = '',
+  focusedSubregionName = '',
   displayMode,
   selectedCountries = [],
   timelineDate = '',
@@ -968,15 +1336,55 @@ export default function WorldProjectionMap({
     return () => mediaQuery.removeEventListener('change', updateMatch)
   }, [])
 
-  const preparedRegionalMapSvg = useMemo(
-    () => preparedRegionalMapSvgByCountryName[focusedCountryName] ?? null,
+  const normalizedFocusedCountryName = useMemo(
+    () => normalizeMapLookupName(focusedCountryName),
     [focusedCountryName]
   )
+  const normalizedFocusedSubregionName = useMemo(
+    () => normalizeMapLookupName(focusedSubregionName),
+    [focusedSubregionName]
+  )
+  const focusedUsaStateCode = useMemo(
+    () => usaStateCodeByRegionName[normalizedFocusedSubregionName] ?? null,
+    [normalizedFocusedSubregionName]
+  )
+  const usesUsaSubregionMap =
+    normalizedFocusedCountryName === 'united states' &&
+    Boolean(focusedSubregionName) &&
+    Boolean(focusedUsaStateCode) &&
+    Array.isArray(subregionalCountries) &&
+    subregionalCountries.length > 0 &&
+    Boolean(preparedUsaMapSvgByStateCode[focusedUsaStateCode])
+  const useUsaStateCodeBinding =
+    normalizedFocusedCountryName === 'united states' && !usesUsaSubregionMap
+  const allowApproximateRegionalMatch = normalizedFocusedCountryName !== 'united states'
+  const activeRegionalCountries = usesUsaSubregionMap
+    ? subregionalCountries
+    : regionalCountries
+  const activeRegionalMapLabel = usesUsaSubregionMap
+    ? focusedSubregionName
+    : focusedCountryName
+  const preparedRegionalMapSvg = useMemo(() => {
+    if (normalizedFocusedCountryName === 'united states') {
+      if (usesUsaSubregionMap && focusedUsaStateCode) {
+        return preparedUsaMapSvgByStateCode[focusedUsaStateCode] ?? null
+      }
+
+      return preparedUsaMapSvg ?? preparedRegionalMapSvgByCountryName[focusedCountryName] ?? null
+    }
+
+    return preparedRegionalMapSvgByCountryName[focusedCountryName] ?? null
+  }, [
+    focusedCountryName,
+    focusedUsaStateCode,
+    normalizedFocusedCountryName,
+    usesUsaSubregionMap,
+  ])
   const hasRegionalMapAsset =
     Boolean(preparedRegionalMapSvg) &&
-    Boolean(focusedCountryName) &&
-    Array.isArray(regionalCountries) &&
-    regionalCountries.length > 0
+    Boolean(activeRegionalMapLabel) &&
+    Array.isArray(activeRegionalCountries) &&
+    activeRegionalCountries.length > 0
 
   const worldCountryByCode = useMemo(() => buildCountryByCode(countries), [countries])
   const selectedCountryCodes = useMemo(
@@ -996,30 +1404,40 @@ export default function WorldProjectionMap({
     [regionalPathEntries]
   )
   const regionalCountryByNormalizedName = useMemo(
-    () => buildRegionalCountryByNormalizedName(regionalCountries),
-    [regionalCountries]
+    () => buildRegionalCountryByNormalizedName(activeRegionalCountries),
+    [activeRegionalCountries]
   )
   const regionalCountryBindings = useMemo(
     () =>
       buildRegionalCountryBindings(
-        regionalCountries,
+        activeRegionalCountries,
         regionalPathLookups,
-        focusedCountryName
+        focusedCountryName,
+        {
+          allowApproximateMatch: allowApproximateRegionalMatch,
+          useUsaStateCodeBinding,
+        }
       ),
-    [focusedCountryName, regionalCountries, regionalPathLookups]
+    [
+      activeRegionalCountries,
+      allowApproximateRegionalMatch,
+      focusedCountryName,
+      regionalPathLookups,
+      useUsaStateCodeBinding,
+    ]
   )
   const regionalCountryByPathNormalizedName = useMemo(
     () => buildRegionalCountryByPathNormalizedName(regionalCountryBindings),
     [regionalCountryBindings]
   )
   const hasRegionalMap = hasRegionalMapAsset && regionalCountryBindings.length > 0
-  const displayedCountries = hasRegionalMap ? regionalCountries : countries
+  const displayedCountries = hasRegionalMap ? activeRegionalCountries : countries
   const selectedCountryNames = useMemo(
     () => buildSelectedNameSet(selectedCountries),
     [selectedCountries]
   )
   const hoveredRegionalCountry = hoveredRegionalCountryName
-    ? regionalCountries.find((country) => country.name === hoveredRegionalCountryName) ?? null
+    ? activeRegionalCountries.find((country) => country.name === hoveredRegionalCountryName) ?? null
     : null
 
   const legendScale = useMemo(
@@ -1061,6 +1479,8 @@ export default function WorldProjectionMap({
     ]
   )
   const activeMapSvg = hasRegionalMap ? styledRegionalMapSvg : styledWorldMapSvg
+  const mapAspectRatio = useMemo(() => extractSvgAspectRatio(activeMapSvg), [activeMapSvg])
+  const [mapViewportSize, setMapViewportSize] = useState({ height: 0, width: 0 })
   const hoveredCountry = hasRegionalMap ? hoveredRegionalCountry : hoveredWorldCountry
   const selectedCountryEntries = useMemo(() => {
     const countriesByName = new Map(displayedCountries.map((country) => [country.name, country]))
@@ -1086,7 +1506,68 @@ export default function WorldProjectionMap({
     setHoveredWorldCountryCode(null)
     setHoveredRegionalCountryName('')
     setHoveredPointer(null)
-  }, [hasRegionalMap, focusedCountryName])
+  }, [activeRegionalMapLabel, hasRegionalMap])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !containerRef.current) {
+      return undefined
+    }
+
+    const containerElement = containerRef.current
+    const minHeight = isCompactLayout
+      ? hasRegionalMap
+        ? 280
+        : 240
+      : hasRegionalMap
+        ? 360
+        : 320
+    const maxHeight = isCompactLayout
+      ? hasRegionalMap
+        ? 520
+        : 440
+      : hasRegionalMap
+        ? 780
+        : 680
+
+    const updateViewportSize = () => {
+      const containerWidth = containerElement.clientWidth
+
+      if (
+        !Number.isFinite(containerWidth) ||
+        containerWidth <= 0 ||
+        !Number.isFinite(mapAspectRatio) ||
+        mapAspectRatio <= 0
+      ) {
+        return
+      }
+
+      const preferredHeight = containerWidth / mapAspectRatio
+      const nextHeight = Math.round(clamp(preferredHeight, minHeight, maxHeight))
+      const nextWidth = Math.round(Math.min(containerWidth, nextHeight * mapAspectRatio))
+
+      setMapViewportSize((currentSize) =>
+        currentSize.height === nextHeight && currentSize.width === nextWidth
+          ? currentSize
+          : { height: nextHeight, width: nextWidth }
+      )
+    }
+
+    updateViewportSize()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateViewportSize)
+      return () => window.removeEventListener('resize', updateViewportSize)
+    }
+
+    const resizeObserver = new ResizeObserver(updateViewportSize)
+    resizeObserver.observe(containerElement)
+    window.addEventListener('resize', updateViewportSize)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateViewportSize)
+    }
+  }, [hasRegionalMap, isCompactLayout, mapAspectRatio])
 
   useEffect(() => {
     if (!hoveredCountryName) {
@@ -1148,8 +1629,13 @@ export default function WorldProjectionMap({
     <div className="flex w-full flex-col gap-3">
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-[4px] bg-[#dfe7ec] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
-        aria-label={hasRegionalMap ? `${focusedCountryName} projection map` : 'World projection map'}
+        className="relative flex w-full items-center justify-center overflow-hidden rounded-[4px] bg-[#dfe7ec]"
+        aria-label={hasRegionalMap ? `${activeRegionalMapLabel} projection map` : 'World projection map'}
+        style={
+          mapViewportSize.height > 0
+            ? { height: `${mapViewportSize.height}px` }
+            : undefined
+        }
         onPointerLeave={() => {
           if (isCompactLayout) {
             return
@@ -1234,7 +1720,22 @@ export default function WorldProjectionMap({
           }
         }}
       >
-        <div dangerouslySetInnerHTML={{ __html: activeMapSvg }} />
+        <div
+          className="[&_svg]:block [&_svg]:h-full [&_svg]:w-full"
+          style={
+            mapViewportSize.width > 0
+              ? {
+                  height: '100%',
+                  maxWidth: '100%',
+                  width: `${mapViewportSize.width}px`,
+                }
+              : {
+                  height: '100%',
+                  width: '100%',
+                }
+          }
+          dangerouslySetInnerHTML={{ __html: activeMapSvg }}
+        />
 
         <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden w-[min(240px,calc(100%-2rem))] rounded-[10px] border border-white/60 bg-[rgba(255,255,255,0.3)] px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur-[6px] sm:block">
           <div className="flex flex-col gap-1.5">
