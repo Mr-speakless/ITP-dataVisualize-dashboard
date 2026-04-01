@@ -3,16 +3,18 @@ const worldDataPath = 'c_data/world'
 
 export const DEFAULT_WORLD_DATE = '2023-03-09'
 
-function buildWorldBaseUrl() {
+function buildWorldBaseUrl(relativePath = worldDataPath) {
   if (!dataPrefix) {
     throw new Error('Missing VITE_C19_C_DATA in .env')
   }
 
-  return `${dataPrefix.replace(/\/$/, '')}/${worldDataPath}`
+  const normalizedDataPrefix = dataPrefix.replace(/\/$/, '')
+  const normalizedRelativePath = String(relativePath ?? worldDataPath).replace(/^\/+/, '')
+  return `${normalizedDataPrefix}/${normalizedRelativePath}`
 }
 
-async function fetchWorldJson(path, signal) {
-  const response = await fetch(`${buildWorldBaseUrl()}/${path}`, { signal })
+async function fetchWorldJson(path, signal, relativePath = worldDataPath) {
+  const response = await fetch(`${buildWorldBaseUrl(relativePath)}/${path}`, { signal })
 
   if (!response.ok) {
     throw new Error(`World data request failed with status ${response.status}`)
@@ -78,6 +80,22 @@ export function normalizeWorldRegionPathName(regionName) {
     .replace(/,/g, '')
 }
 
+export function buildWorldSubregionPath(parentRegionName) {
+  return buildWorldSubregionPathByHierarchy([parentRegionName])
+}
+
+export function buildWorldSubregionPathByHierarchy(regionHierarchy = []) {
+  const normalizedHierarchy = (Array.isArray(regionHierarchy) ? regionHierarchy : [])
+    .map((regionName) => normalizeWorldRegionPathName(regionName))
+    .filter(Boolean)
+
+  if (normalizedHierarchy.length === 0) {
+    return worldDataPath
+  }
+
+  return `${worldDataPath}/c_subs/${normalizedHierarchy.join('/c_subs/')}`
+}
+
 export async function fetchWorldRegionSeries(regionName, signal) {
   const normalizedRegionName = normalizeWorldRegionPathName(regionName)
 
@@ -86,6 +104,48 @@ export async function fetchWorldRegionSeries(regionName, signal) {
   }
 
   return fetchWorldJson(`c_series/${normalizedRegionName}.json`, signal)
+}
+
+export async function fetchWorldSubregionMeta(parentRegionName, signal) {
+  return fetchWorldNestedMeta([parentRegionName], signal)
+}
+
+export async function fetchWorldSubregionDaySnapshot(parentRegionName, date, signal) {
+  return fetchWorldNestedDaySnapshot([parentRegionName], date, signal)
+}
+
+export async function fetchWorldNestedMeta(regionHierarchy, signal) {
+  return fetchWorldJson(
+    'c_meta.json',
+    signal,
+    buildWorldSubregionPathByHierarchy(regionHierarchy)
+  )
+}
+
+export async function fetchWorldNestedDaySnapshot(regionHierarchy, date, signal) {
+  return fetchWorldJson(
+    `c_days/${date}.json`,
+    signal,
+    buildWorldSubregionPathByHierarchy(regionHierarchy)
+  )
+}
+
+export async function fetchWorldSubregionSeries(parentRegionName, regionName, signal) {
+  return fetchWorldNestedSeries([parentRegionName], regionName, signal)
+}
+
+export async function fetchWorldNestedSeries(regionHierarchy, regionName, signal) {
+  const normalizedRegionName = normalizeWorldRegionPathName(regionName)
+
+  if (!normalizedRegionName) {
+    return []
+  }
+
+  return fetchWorldJson(
+    `c_series/${normalizedRegionName}.json`,
+    signal,
+    buildWorldSubregionPathByHierarchy(regionHierarchy)
+  )
 }
 
 export function isDateAvailable(meta, date) {
@@ -100,9 +160,27 @@ export function getFallbackWorldDate(meta) {
   return meta?.c_dates?.[meta.c_dates.length - 1] ?? DEFAULT_WORLD_DATE
 }
 
-export function buildWorldCountryRows(meta, dayItems) {
+export function buildWorldCountryRows(meta, dayItems, context = '') {
   const metaByRegion = buildMetaByRegion(meta?.c_regions)
   const items = Array.isArray(dayItems) ? dayItems : []
+  const isContextString = typeof context === 'string'
+  const contextObject = !isContextString && context && typeof context === 'object'
+    ? context
+    : {}
+  const parentRegionName = isContextString
+    ? context
+    : contextObject.parentRegionName ?? ''
+  const seriesPathHierarchy = isContextString
+    ? (parentRegionName ? [parentRegionName] : [])
+    : Array.isArray(contextObject.seriesPathHierarchy)
+      ? contextObject.seriesPathHierarchy.filter(Boolean)
+      : []
+  const regionLevel = Number(contextObject.regionLevel) > 0
+    ? Number(contextObject.regionLevel)
+    : seriesPathHierarchy.length > 0
+      ? seriesPathHierarchy.length + 1
+      : 1
+  const isSubregionLevel = regionLevel > 1
 
   return items.map((item) => {
     const regionMeta = metaByRegion[item.c_ref] ?? {}
@@ -112,8 +190,19 @@ export function buildWorldCountryRows(meta, dayItems) {
     const dailyCases = item.daily?.Cases ?? 0
     const dailyDeaths = item.daily?.Deaths ?? 0
 
+    const seriesKey = seriesPathHierarchy.length > 0
+      ? `${seriesPathHierarchy.join('::')}::${item.c_ref}`
+      : item.c_ref
+
     return {
+      key: seriesKey,
       name: item.c_ref,
+      parentRegionName,
+      regionLevel,
+      seriesPathHierarchy,
+      isSubregion: isSubregionLevel,
+      hasSubregions: Number(regionMeta.n_subs ?? 0) > 0,
+      seriesKey,
       population,
       totals: {
         cases: totalCases,

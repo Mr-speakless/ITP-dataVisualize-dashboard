@@ -5,6 +5,7 @@ import expendIcon from '../../../assets/ExpendIcon.svg?raw'
 import resetDataIcon from '../../../assets/ResetData.svg?raw'
 import searchIcon from '../../../assets/searchIcon.svg?raw'
 import sortIcon from '../../../assets/sortIcon.svg?raw'
+import toggleIcon from '../../../assets/Toggle.svg?raw'
 import {
   formatDashboardNumber,
   getMetricLabel,
@@ -21,24 +22,47 @@ function CountryRow({
   sortMode,
   isSelected,
   onToggle,
+  nestLevel = 0,
+  isExpanded = false,
+  onToggleExpand,
 }) {
   const value = getSortValue(country, metric, sortMode)
-  const flagUrl = getFlagUrlForRegion(country.name)
+  const isNested = nestLevel > 0
+  const flagUrl = isNested ? null : getFlagUrlForRegion(country.name)
   const nationalColor = getNationalColorForRegion(country.name)
   const [hasFlagLoadError, setHasFlagLoadError] = useState(false)
   const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
   const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
+  const isExpandable = Boolean(country.hasSubregions) && nestLevel < 2
 
   useEffect(() => {
     setHasFlagLoadError(false)
   }, [flagUrl])
 
   return (
-    <button
-      type="button"
-      onClick={() => onToggle(country.name)}
-      className="grid w-full grid-cols-[20px_30px_minmax(0,1fr)_minmax(96px,auto)] items-center gap-3 rounded-[5px] px-1 py-1 text-left text-black opacity-100 transition-colors duration-150 hover:bg-grey-bg"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onToggle(country)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) {
+          return
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onToggle(country)
+        }
+      }}
+      className={`grid w-full ${
+        isNested
+          ? 'grid-cols-[20px_minmax(0,1fr)_minmax(96px,auto)]'
+          : 'grid-cols-[20px_30px_minmax(0,1fr)_minmax(96px,auto)]'
+      } items-center gap-2 rounded-[5px] py-1 text-left text-black opacity-100 ${
+        nestLevel === 2 ? 'pl-[3.25rem] pr-1' : isNested ? 'pl-7 pr-1' : 'px-1'
+      }`}
       aria-pressed={isSelected}
+      aria-label={`${isNested ? 'Region' : 'Country'} ${country.name}`}
       data-name="CountryRow"
     >
       <span
@@ -46,26 +70,58 @@ function CountryRow({
         style={selectionIndicatorStyle}
         aria-hidden="true"
       />
-      <span
-        className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey bg-grey"
-        aria-hidden="true"
-      >
-        {flagUrl && !hasFlagLoadError ? (
-          <img
-            src={flagUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
-            onError={() => setHasFlagLoadError(true)}
-          />
-        ) : (
-          <span className="block h-[18px] w-[29px] bg-grey" />
-        )}
-      </span>
-      <span className="ty-small truncate text-black">{country.name}</span>
+      {!isNested ? (
+        <span
+          className="flex h-[18px] w-[29px] shrink-0 items-center overflow-hidden rounded-[2px] border border-grey bg-grey"
+          aria-hidden="true"
+        >
+          {flagUrl && !hasFlagLoadError ? (
+            <img
+              src={flagUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+              onError={() => setHasFlagLoadError(true)}
+            />
+          ) : (
+            <span className="block h-[18px] w-[29px] bg-grey" />
+          )}
+        </span>
+      ) : null}
+      {isExpandable ? (
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleExpand?.(country.name)
+            }}
+            className="flex items-center gap-2 rounded-[4px] px-1 transition-all duration-150 hover:bg-grey-bg hover:shadow-[0_1px_3px_rgba(0,0,0,0.18)]"
+            aria-label={isExpanded ? `Collapse ${country.name}` : `Expand ${country.name}`}
+            aria-expanded={isExpanded}
+          >
+            <span className="ty-small truncate text-black">{country.name}</span>
+            <span
+              className={`flex h-[10px] w-[5px] items-center justify-center text-medium-grey transition-transform duration-150 ${
+                isExpanded ? 'rotate-90' : ''
+              }`}
+              aria-hidden="true"
+            >
+              <span
+                className="h-[10px] w-[5px] [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
+                dangerouslySetInnerHTML={{ __html: toggleIcon }}
+              />
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div className="min-w-0">
+          <span className="ty-small truncate text-black">{country.name}</span>
+        </div>
+      )}
       <span className="ty-small text-right text-black">{formatDashboardNumber(value)}</span>
-    </button>
+    </div>
   )
 }
 
@@ -84,6 +140,18 @@ const SideBar = ({
   countries,
   selectedCountries,
   onToggleCountry,
+  expandedCountryName,
+  expandedCountryRows,
+  expandedCountryRowsDate,
+  isExpandedCountryRowsLoading,
+  expandedCountryRowsError,
+  expandedSubregionName,
+  expandedSubregionRows,
+  expandedSubregionRowsDate,
+  isExpandedSubregionRowsLoading,
+  expandedSubregionRowsError,
+  onToggleCountryExpansion,
+  onToggleSubregionExpansion,
   onSelectTopTen,
   isTopTenSelected,
   onResetSidebar,
@@ -193,8 +261,7 @@ const SideBar = ({
               className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-dark-grey)] opacity-100 [&>svg]:h-full [&>svg]:w-full [&>svg]:stroke-current [&>svg]:fill-none"
               aria-hidden="true"
               dangerouslySetInnerHTML={{ __html: expendIcon }}
-            >
-            </span>
+            />
           </div>
 
           <button
@@ -235,16 +302,133 @@ const SideBar = ({
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="flex flex-col gap-2">
-            {countries.map((country) => (
-              <CountryRow
-                key={country.name}
-                country={country}
-                metric={metric}
-                sortMode={sortMode}
-                isSelected={selectedCountries.includes(country.name)}
-                onToggle={onToggleCountry}
-              />
-            ))}
+            {countries.map((country) => {
+              const isExpanded = expandedCountryName === country.name
+
+              return (
+                <div key={country.key ?? country.name} className="flex flex-col gap-1">
+                  <CountryRow
+                    country={country}
+                    metric={metric}
+                    sortMode={sortMode}
+                    isSelected={selectedCountries.includes(country.name)}
+                    onToggle={onToggleCountry}
+                    nestLevel={0}
+                    isExpanded={isExpanded}
+                    onToggleExpand={onToggleCountryExpansion}
+                  />
+
+                  {isExpanded ? (
+                    <div className="flex flex-col gap-1">
+                      {isExpandedCountryRowsLoading ? (
+                        <p className="ty-small pl-7 text-medium-grey">Loading regions...</p>
+                      ) : null}
+
+                      {!isExpandedCountryRowsLoading && expandedCountryRowsError ? (
+                        <p className="ty-small pl-7 text-medium-grey">
+                          Unable to load regions: {expandedCountryRowsError}
+                        </p>
+                      ) : null}
+
+                      {!isExpandedCountryRowsLoading &&
+                      !expandedCountryRowsError &&
+                      expandedCountryRows.length === 0 ? (
+                        <p className="ty-small pl-7 text-medium-grey">
+                          No region-level data is available for this country.
+                        </p>
+                      ) : null}
+
+                      {!isExpandedCountryRowsLoading &&
+                      !expandedCountryRowsError &&
+                      expandedCountryRows.length > 0
+                        ? expandedCountryRows.map((region) => (
+                            <div
+                              key={region.key ?? `${country.name}::${region.name}`}
+                              className="flex flex-col gap-1"
+                            >
+                              <CountryRow
+                                country={region}
+                                metric={metric}
+                                sortMode={sortMode}
+                                isSelected={selectedCountries.includes(region.name)}
+                                onToggle={onToggleCountry}
+                                nestLevel={1}
+                                isExpanded={expandedSubregionName === region.name}
+                                onToggleExpand={onToggleSubregionExpansion}
+                              />
+
+                              {expandedSubregionName === region.name ? (
+                                <div className="flex flex-col gap-1">
+                                  {isExpandedSubregionRowsLoading ? (
+                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
+                                      Loading third-level regions...
+                                    </p>
+                                  ) : null}
+
+                                  {!isExpandedSubregionRowsLoading &&
+                                  expandedSubregionRowsError ? (
+                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
+                                      Unable to load third-level regions: {expandedSubregionRowsError}
+                                    </p>
+                                  ) : null}
+
+                                  {!isExpandedSubregionRowsLoading &&
+                                  !expandedSubregionRowsError &&
+                                  expandedSubregionRows.length === 0 ? (
+                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
+                                      No third-level region data is available.
+                                    </p>
+                                  ) : null}
+
+                                  {!isExpandedSubregionRowsLoading &&
+                                  !expandedSubregionRowsError &&
+                                  expandedSubregionRows.length > 0
+                                    ? expandedSubregionRows.map((thirdRegion) => (
+                                        <CountryRow
+                                          key={
+                                            thirdRegion.key ??
+                                            `${country.name}::${region.name}::${thirdRegion.name}`
+                                          }
+                                          country={thirdRegion}
+                                          metric={metric}
+                                          sortMode={sortMode}
+                                          isSelected={selectedCountries.includes(
+                                            thirdRegion.name
+                                          )}
+                                          onToggle={onToggleCountry}
+                                          nestLevel={2}
+                                        />
+                                      ))
+                                    : null}
+
+                                  {!isExpandedSubregionRowsLoading &&
+                                  !expandedSubregionRowsError &&
+                                  expandedSubregionRowsDate &&
+                                  expandedSubregionRowsDate !== selectedDate ? (
+                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
+                                      Third-level regions shown on nearest available date:{' '}
+                                      {expandedSubregionRowsDate}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))
+                        : null}
+
+                      {!isExpandedCountryRowsLoading &&
+                      !expandedCountryRowsError &&
+                      expandedCountryRowsDate &&
+                      expandedCountryRowsDate !== selectedDate ? (
+                        <p className="ty-small pl-7 text-medium-grey">
+                          Regions shown on nearest available date: {expandedCountryRowsDate}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
             {countries.length === 0 ? (
               <p className="ty-small text-medium-grey">No countries match the current filters.</p>
             ) : null}

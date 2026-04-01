@@ -12,6 +12,9 @@ import {
   buildCountryTrendSeriesPoints,
   buildTrendDateRange,
   buildWorldCountryRows,
+  fetchWorldNestedDaySnapshot,
+  fetchWorldNestedMeta,
+  fetchWorldNestedSeries,
   fetchWorldRegionSeries,
   fetchWorldDaySnapshot,
   fetchWorldMeta,
@@ -64,6 +67,21 @@ function getEarliestAvailableWorldDate(meta) {
   return meta?.c_dates?.[0] ?? DEFAULT_WORLD_DATE
 }
 
+function resolveNearestAvailableDate(meta, targetDate) {
+  const availableDates = Array.isArray(meta?.c_dates) ? meta.c_dates : []
+
+  if (availableDates.length === 0) {
+    return ''
+  }
+
+  if (availableDates.includes(targetDate)) {
+    return targetDate
+  }
+
+  const latestBeforeTarget = availableDates.filter((date) => date <= targetDate).at(-1)
+  return latestBeforeTarget ?? availableDates[availableDates.length - 1]
+}
+
 const MiddleChartArea = () => {
   const [chart, setChart] = useState(true)
   const [displayMode, setDisplayMode] = useState(initialDisplayMode)
@@ -78,6 +96,16 @@ const MiddleChartArea = () => {
   const [sortMode, setSortMode] = useState(initialSortMode)
   const [sortDirection, setSortDirection] = useState(initialSortDirection)
   const [selectedCountries, setSelectedCountries] = useState([])
+  const [expandedCountryName, setExpandedCountryName] = useState('')
+  const [expandedCountryRows, setExpandedCountryRows] = useState([])
+  const [expandedCountryRowsDate, setExpandedCountryRowsDate] = useState('')
+  const [isExpandedCountryRowsLoading, setIsExpandedCountryRowsLoading] = useState(false)
+  const [expandedCountryRowsError, setExpandedCountryRowsError] = useState('')
+  const [expandedSubregionName, setExpandedSubregionName] = useState('')
+  const [expandedSubregionRows, setExpandedSubregionRows] = useState([])
+  const [expandedSubregionRowsDate, setExpandedSubregionRowsDate] = useState('')
+  const [isExpandedSubregionRowsLoading, setIsExpandedSubregionRowsLoading] = useState(false)
+  const [expandedSubregionRowsError, setExpandedSubregionRowsError] = useState('')
   const [hoveredCountryName, setHoveredCountryName] = useState('')
   const [countrySeriesByName, setCountrySeriesByName] = useState({})
   const [worldSnapshotByDate, setWorldSnapshotByDate] = useState({})
@@ -217,6 +245,161 @@ const MiddleChartArea = () => {
   }, [chart, meta, timelineDate, selectedDate, worldSnapshotByDate])
 
   useEffect(() => {
+    if (!expandedCountryName) {
+      setExpandedCountryRows([])
+      setExpandedCountryRowsDate('')
+      setExpandedCountryRowsError('')
+      setIsExpandedCountryRowsLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadExpandedCountryRows() {
+      setIsExpandedCountryRowsLoading(true)
+      setExpandedCountryRowsError('')
+      setExpandedCountryRows([])
+      setExpandedCountryRowsDate('')
+
+      try {
+        const subregionMeta = await fetchWorldNestedMeta(
+          [expandedCountryName],
+          controller.signal
+        )
+        const subregionDate = resolveNearestAvailableDate(subregionMeta, selectedDate)
+
+        if (!subregionDate) {
+          setExpandedCountryRows([])
+          setExpandedCountryRowsDate('')
+          return
+        }
+
+        const subregionDaySnapshot = await fetchWorldNestedDaySnapshot(
+          [expandedCountryName],
+          subregionDate,
+          controller.signal
+        )
+        const subregionRows = buildWorldCountryRows(
+          subregionMeta,
+          subregionDaySnapshot,
+          {
+            parentRegionName: expandedCountryName,
+            regionLevel: 2,
+            seriesPathHierarchy: [expandedCountryName],
+          }
+        )
+
+        setExpandedCountryRows(subregionRows)
+        setExpandedCountryRowsDate(subregionDate)
+      } catch (loadError) {
+        if (loadError.name !== 'AbortError') {
+          setExpandedCountryRows([])
+          setExpandedCountryRowsDate('')
+          setExpandedCountryRowsError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Unknown error while loading subregion data'
+          )
+        }
+      } finally {
+        setIsExpandedCountryRowsLoading(false)
+      }
+    }
+
+    loadExpandedCountryRows()
+
+    return () => controller.abort()
+  }, [expandedCountryName, selectedDate])
+
+  useEffect(() => {
+    if (!expandedCountryName) {
+      setExpandedSubregionName('')
+      setExpandedSubregionRows([])
+      setExpandedSubregionRowsDate('')
+      setExpandedSubregionRowsError('')
+      setIsExpandedSubregionRowsLoading(false)
+      return
+    }
+
+    if (!expandedSubregionName) {
+      return
+    }
+
+    if (!expandedCountryRows.some((region) => region.name === expandedSubregionName)) {
+      setExpandedSubregionName('')
+      setExpandedSubregionRows([])
+      setExpandedSubregionRowsDate('')
+      setExpandedSubregionRowsError('')
+      setIsExpandedSubregionRowsLoading(false)
+    }
+  }, [expandedCountryName, expandedCountryRows, expandedSubregionName])
+
+  useEffect(() => {
+    if (!expandedCountryName || !expandedSubregionName) {
+      setExpandedSubregionRows([])
+      setExpandedSubregionRowsDate('')
+      setExpandedSubregionRowsError('')
+      setIsExpandedSubregionRowsLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadExpandedSubregionRows() {
+      setIsExpandedSubregionRowsLoading(true)
+      setExpandedSubregionRowsError('')
+      setExpandedSubregionRows([])
+      setExpandedSubregionRowsDate('')
+
+      try {
+        const thirdLevelMeta = await fetchWorldNestedMeta(
+          [expandedCountryName, expandedSubregionName],
+          controller.signal
+        )
+        const thirdLevelDate = resolveNearestAvailableDate(thirdLevelMeta, selectedDate)
+
+        if (!thirdLevelDate) {
+          return
+        }
+
+        const thirdLevelDaySnapshot = await fetchWorldNestedDaySnapshot(
+          [expandedCountryName, expandedSubregionName],
+          thirdLevelDate,
+          controller.signal
+        )
+        const thirdLevelRows = buildWorldCountryRows(
+          thirdLevelMeta,
+          thirdLevelDaySnapshot,
+          {
+            parentRegionName: expandedSubregionName,
+            regionLevel: 3,
+            seriesPathHierarchy: [expandedCountryName, expandedSubregionName],
+          }
+        )
+
+        setExpandedSubregionRows(thirdLevelRows)
+        setExpandedSubregionRowsDate(thirdLevelDate)
+      } catch (loadError) {
+        if (loadError.name !== 'AbortError') {
+          setExpandedSubregionRows([])
+          setExpandedSubregionRowsDate('')
+          setExpandedSubregionRowsError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Unknown error while loading third-level region data'
+          )
+        }
+      } finally {
+        setIsExpandedSubregionRowsLoading(false)
+      }
+    }
+
+    loadExpandedSubregionRows()
+
+    return () => controller.abort()
+  }, [expandedCountryName, expandedSubregionName, selectedDate])
+
+  useEffect(() => {
     if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0) {
       return
     }
@@ -287,6 +470,16 @@ const MiddleChartArea = () => {
     )
   }, [searchQuery, sortedCountries])
 
+  const sortedExpandedCountryRows = useMemo(
+    () => sortCountries(expandedCountryRows, displayMode.metric, sortMode, sortDirection),
+    [displayMode.metric, expandedCountryRows, sortMode, sortDirection]
+  )
+
+  const sortedExpandedSubregionRows = useMemo(
+    () => sortCountries(expandedSubregionRows, displayMode.metric, sortMode, sortDirection),
+    [displayMode.metric, expandedSubregionRows, sortMode, sortDirection]
+  )
+
   const filteredTopTenCountryNames = useMemo(
     () => getTopTenCountryNames(filteredCountries),
     [filteredCountries]
@@ -305,27 +498,112 @@ const MiddleChartArea = () => {
     }
 
     setSelectedCountries((currentSelection) => {
-      const available = currentSelection.filter((name) =>
-        countries.some((country) => country.name === name)
+      if (expandedCountryName) {
+        const expandedCountryRowNames = new Set([
+          expandedCountryName,
+          ...sortedExpandedCountryRows.map((country) => country.name),
+          ...sortedExpandedSubregionRows.map((country) => country.name),
+        ])
+        const availableExpandedSelection = currentSelection.filter((name) =>
+          expandedCountryRowNames.has(name)
+        )
+
+        if (availableExpandedSelection.length > 0) {
+          return availableExpandedSelection
+        }
+
+        return [expandedCountryName]
+      }
+
+      const topLevelCountryNames = new Set(countries.map((country) => country.name))
+      const availableTopLevelSelection = currentSelection.filter((name) =>
+        topLevelCountryNames.has(name)
       )
 
-      if (available.length > 0) {
-        return available
+      if (availableTopLevelSelection.length > 0) {
+        return availableTopLevelSelection
       }
 
       return sortCountries(countries, displayMode.metric, sortMode, sortDirection)
         .slice(0, 10)
         .map((country) => country.name)
     })
-  }, [countries, displayMode.metric, sortMode, sortDirection])
+  }, [
+    countries,
+    displayMode.metric,
+    expandedCountryName,
+    sortedExpandedCountryRows,
+    sortedExpandedSubregionRows,
+    sortMode,
+    sortDirection,
+  ])
 
   const selectedCountryRows = useMemo(() => {
     const countriesByName = new Map(countries.map((country) => [country.name, country]))
 
+    sortedExpandedCountryRows.forEach((country) => {
+      countriesByName.set(country.name, country)
+    })
+    sortedExpandedSubregionRows.forEach((country) => {
+      countriesByName.set(country.name, country)
+    })
+
     return selectedCountries
       .map((countryName) => countriesByName.get(countryName))
       .filter(Boolean)
-  }, [countries, selectedCountries])
+  }, [countries, selectedCountries, sortedExpandedCountryRows, sortedExpandedSubregionRows])
+
+  const countryRowsByName = useMemo(() => {
+    const rowsByName = new Map()
+    countries.forEach((country) => rowsByName.set(country.name, country))
+    sortedExpandedCountryRows.forEach((country) => rowsByName.set(country.name, country))
+    sortedExpandedSubregionRows.forEach((country) => rowsByName.set(country.name, country))
+    return rowsByName
+  }, [countries, sortedExpandedCountryRows, sortedExpandedSubregionRows])
+
+  const handleToggleRegionSelection = (regionInput) => {
+    setSelectedCountries((currentSelection) => {
+      const regionName = typeof regionInput === 'string' ? regionInput : regionInput?.name
+
+      if (!regionName) {
+        return currentSelection
+      }
+
+      const regionRow =
+        typeof regionInput === 'object' && regionInput
+          ? regionInput
+          : countryRowsByName.get(regionName)
+
+      if (expandedCountryName) {
+        const allowedNames = new Set([
+          expandedCountryName,
+          ...sortedExpandedCountryRows.map((country) => country.name),
+          ...sortedExpandedSubregionRows.map((country) => country.name),
+        ])
+
+        if (!allowedNames.has(regionName)) {
+          return currentSelection
+        }
+      }
+
+      const isSelecting = !currentSelection.includes(regionName)
+      let nextSelection = toggleCountrySelection(currentSelection, regionName)
+
+      if (isSelecting && Number(regionRow?.regionLevel) === 3) {
+        const parentSecondLevelName =
+          regionRow?.seriesPathHierarchy?.[1] ?? regionRow?.parentRegionName
+        const secondLevelNames = new Set(
+          sortedExpandedCountryRows.map((country) => country.name)
+        )
+
+        nextSelection = nextSelection.filter(
+          (name) => !secondLevelNames.has(name) || name === parentSecondLevelName
+        )
+      }
+
+      return nextSelection
+    })
+  }
 
   const requestedMapCountries = useMemo(() => {
     if (timelineDate === selectedDate && loadedSelectedDate === selectedDate) {
@@ -384,7 +662,7 @@ const MiddleChartArea = () => {
     }
 
     const missingCountries = selectedCountryRows.filter(
-      (country) => !Array.isArray(countrySeriesByName[country.name])
+      (country) => !Array.isArray(countrySeriesByName[country.seriesKey ?? country.name])
     )
 
     if (missingCountries.length === 0) {
@@ -401,17 +679,31 @@ const MiddleChartArea = () => {
 
       try {
         const results = await Promise.all(
-          missingCountries.map(async (country) => ({
-            name: country.name,
-            series: await fetchWorldRegionSeries(country.name, controller.signal),
-          }))
+          missingCountries.map(async (country) => {
+            const seriesPathHierarchy = Array.isArray(country.seriesPathHierarchy)
+              ? country.seriesPathHierarchy
+              : []
+
+            return {
+              name: country.name,
+              seriesKey: country.seriesKey ?? country.name,
+              series:
+                seriesPathHierarchy.length > 0
+                  ? await fetchWorldNestedSeries(
+                      seriesPathHierarchy,
+                      country.name,
+                      controller.signal
+                    )
+                  : await fetchWorldRegionSeries(country.name, controller.signal),
+            }
+          })
         )
 
         setCountrySeriesByName((currentSeries) => {
           const nextSeries = { ...currentSeries }
 
           results.forEach((result) => {
-            nextSeries[result.name] = result.series
+            nextSeries[result.seriesKey] = result.series
           })
 
           return nextSeries
@@ -443,7 +735,7 @@ const MiddleChartArea = () => {
     () =>
       selectedCountryRows
         .map((country) => {
-          const rawSeries = countrySeriesByName[country.name]
+          const rawSeries = countrySeriesByName[country.seriesKey ?? country.name]
 
           if (!Array.isArray(rawSeries)) {
             return null
@@ -508,10 +800,74 @@ const MiddleChartArea = () => {
                   ),
                 countries: filteredCountries,
                 selectedCountries,
-                onToggleCountry: (countryName) =>
-                  setSelectedCountries((currentSelection) =>
-                    toggleCountrySelection(currentSelection, countryName)
-                  ),
+                onToggleCountry: handleToggleRegionSelection,
+                expandedCountryName,
+                expandedCountryRows: sortedExpandedCountryRows,
+                expandedCountryRowsDate,
+                isExpandedCountryRowsLoading,
+                expandedCountryRowsError,
+                expandedSubregionName,
+                expandedSubregionRows: sortedExpandedSubregionRows,
+                expandedSubregionRowsDate,
+                isExpandedSubregionRowsLoading,
+                expandedSubregionRowsError,
+                onToggleCountryExpansion: (countryName) =>
+                  setExpandedCountryName((currentExpandedCountryName) => {
+                    const nextExpandedCountryName =
+                      currentExpandedCountryName === countryName ? '' : countryName
+
+                    setExpandedSubregionName('')
+                    setExpandedSubregionRows([])
+                    setExpandedSubregionRowsDate('')
+                    setExpandedSubregionRowsError('')
+
+                    if (nextExpandedCountryName) {
+                      setSelectedCountries([nextExpandedCountryName])
+                    } else {
+                      setSelectedCountries((currentSelection) =>
+                        currentSelection.filter((name) =>
+                          countries.some((country) => country.name === name)
+                        )
+                      )
+                    }
+
+                    return nextExpandedCountryName
+                  }),
+                onToggleSubregionExpansion: (subregionName) =>
+                  setExpandedSubregionName((currentExpandedSubregionName) => {
+                    const nextExpandedSubregionName =
+                      currentExpandedSubregionName === subregionName
+                        ? ''
+                        : subregionName
+
+                    if (nextExpandedSubregionName) {
+                      setSelectedCountries((currentSelection) =>
+                        Array.from(
+                          new Set([
+                            expandedCountryName,
+                            nextExpandedSubregionName,
+                            ...currentSelection.filter((name) =>
+                              sortedExpandedSubregionRows.some(
+                                (row) =>
+                                  row.parentRegionName === nextExpandedSubregionName &&
+                                  row.name === name
+                              )
+                            ),
+                          ])
+                        )
+                      )
+                    } else {
+                      setSelectedCountries((currentSelection) =>
+                        currentSelection.filter(
+                          (name) =>
+                            name === expandedCountryName ||
+                            sortedExpandedCountryRows.some((country) => country.name === name)
+                        )
+                      )
+                    }
+
+                    return nextExpandedSubregionName
+                  }),
                 onSelectTopTen: () =>
                   setSelectedCountries((currentSelection) => {
                     if (
@@ -535,6 +891,14 @@ const MiddleChartArea = () => {
                   setSelectedDate(getFallbackWorldDate(meta))
                   setTimelineStartDate(getEarliestAvailableWorldDate(meta))
                   setTimelineDate(getFallbackWorldDate(meta))
+                  setExpandedCountryName('')
+                  setExpandedCountryRows([])
+                  setExpandedCountryRowsDate('')
+                  setExpandedCountryRowsError('')
+                  setExpandedSubregionName('')
+                  setExpandedSubregionRows([])
+                  setExpandedSubregionRowsDate('')
+                  setExpandedSubregionRowsError('')
                   setSelectedCountries(
                     getTopTenCountryNames(
                       sortCountries(countries, displayMode.metric, initialSortMode, initialSortDirection)
@@ -569,6 +933,8 @@ const MiddleChartArea = () => {
           ) : (
             <WorldProjectionMap
               countries={mapCountries}
+              regionalCountries={sortedExpandedCountryRows}
+              focusedCountryName={expandedCountryName}
               displayMode={displayMode}
               selectedCountries={selectedCountries}
               timelineDate={mapDisplayDate}
@@ -577,11 +943,7 @@ const MiddleChartArea = () => {
               error={error}
               hoveredCountryName={hoveredCountryName}
               onHoverCountryChange={setHoveredCountryName}
-              onToggleCountry={(countryName) =>
-                setSelectedCountries((currentSelection) =>
-                  toggleCountrySelection(currentSelection, countryName)
-                )
-              }
+              onToggleCountry={handleToggleRegionSelection}
             />
           )}
           {/* <p className="ty-small text-dark-grey">
