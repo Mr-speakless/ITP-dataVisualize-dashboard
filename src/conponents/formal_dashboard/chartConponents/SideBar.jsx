@@ -321,13 +321,17 @@ const SideBar = ({
 
                   {isExpanded ? (
                     <div className="flex flex-col gap-1">
-                      {expandedCountryRowsError && expandedCountryRows.length === 0 ? (
+                      {!isExpandedCountryRowsLoading &&
+                      expandedCountryRowsError &&
+                      expandedCountryRows.length === 0 ? (
                         <p className="ty-small pl-7 text-medium-grey">
                           Unable to load regions: {expandedCountryRowsError}
                         </p>
                       ) : null}
 
-                      {!expandedCountryRowsError && expandedCountryRows.length === 0 ? (
+                      {!isExpandedCountryRowsLoading &&
+                      !expandedCountryRowsError &&
+                      expandedCountryRows.length === 0 ? (
                         <p className="ty-small pl-7 text-medium-grey">
                           No region-level data is available for this country.
                         </p>
@@ -353,14 +357,16 @@ const SideBar = ({
 
                               {expandedSubregionName === region.name ? (
                                 <div className="flex flex-col gap-1">
-                                  {expandedSubregionRowsError &&
+                                  {!isExpandedSubregionRowsLoading &&
+                                  expandedSubregionRowsError &&
                                   expandedSubregionRows.length === 0 ? (
                                     <p className="ty-small pl-[3.25rem] text-medium-grey">
                                       Unable to load third-level regions: {expandedSubregionRowsError}
                                     </p>
                                   ) : null}
 
-                                  {!expandedSubregionRowsError &&
+                                  {!isExpandedSubregionRowsLoading &&
+                                  !expandedSubregionRowsError &&
                                   expandedSubregionRows.length === 0 ? (
                                     <p className="ty-small pl-[3.25rem] text-medium-grey">
                                       No third-level region data is available.
@@ -387,13 +393,6 @@ const SideBar = ({
                                       ))
                                     : null}
 
-                                  {isExpandedSubregionRowsLoading &&
-                                  expandedSubregionRows.length > 0 ? (
-                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
-                                      Updating third-level regions...
-                                    </p>
-                                  ) : null}
-
                                   {!expandedSubregionRowsError &&
                                   expandedSubregionRowsDate &&
                                   expandedSubregionRowsDate !== selectedDate ? (
@@ -407,10 +406,6 @@ const SideBar = ({
                             </div>
                           ))
                         : null}
-
-                      {isExpandedCountryRowsLoading && expandedCountryRows.length > 0 ? (
-                        <p className="ty-small pl-7 text-medium-grey">Updating regions...</p>
-                      ) : null}
 
                       {!expandedCountryRowsError &&
                       expandedCountryRowsDate &&
