@@ -232,6 +232,24 @@ export function buildTrendDateRange(meta, endDate, startDate) {
   )
 }
 
+function findLatestSeriesItemBeforeDate(seriesItems, date) {
+  if (!Array.isArray(seriesItems) || !date) {
+    return null
+  }
+
+  return seriesItems.reduce((latestItem, candidate) => {
+    if (!candidate?.on || candidate.on >= date) {
+      return latestItem
+    }
+
+    if (!latestItem?.on || candidate.on > latestItem.on) {
+      return candidate
+    }
+
+    return latestItem
+  }, null)
+}
+
 export function buildCountryTrendSeriesPoints(country, seriesItems, displayMode, dates) {
   if (!country || !Array.isArray(dates) || dates.length === 0) {
     return []
@@ -247,13 +265,16 @@ export function buildCountryTrendSeriesPoints(country, seriesItems, displayMode,
     return accumulator
   }, {})
 
-  let previousTotalCases = 0
-  let previousTotalDeaths = 0
+  const baselineItem = findLatestSeriesItemBeforeDate(items, dates[0])
+  let previousTotalCases = Number(baselineItem?.Cases ?? 0)
+  let previousTotalDeaths = Number(baselineItem?.Deaths ?? 0)
 
   return dates.map((date, index) => {
     const item = itemsByDate[date]
-    const totalCases = Number(item?.Cases ?? previousTotalCases)
-    const totalDeaths = Number(item?.Deaths ?? previousTotalDeaths)
+    const nextTotalCases = Number(item?.Cases)
+    const nextTotalDeaths = Number(item?.Deaths)
+    const totalCases = Number.isFinite(nextTotalCases) ? nextTotalCases : previousTotalCases
+    const totalDeaths = Number.isFinite(nextTotalDeaths) ? nextTotalDeaths : previousTotalDeaths
 
     // Some historical corrections can create negative daily diffs.
     // Clamp them to zero so the chart stays legible for "On Day" mode.

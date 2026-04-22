@@ -149,6 +149,10 @@ const MiddleChartArea = () => {
   const [seriesError, setSeriesError] = useState('')
   const pendingMapDatesRef = useRef(new Set())
   const controlsRowRef = useRef(null)
+  const regionalSnapshotDate = useMemo(
+    () => (chart ? selectedDate : timelineDate || selectedDate),
+    [chart, selectedDate, timelineDate]
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -289,15 +293,13 @@ const MiddleChartArea = () => {
     async function loadExpandedCountryRows() {
       setIsExpandedCountryRowsLoading(true)
       setExpandedCountryRowsError('')
-      setExpandedCountryRows([])
-      setExpandedCountryRowsDate('')
 
       try {
         const subregionMeta = await fetchWorldNestedMeta(
           [expandedCountryName],
           controller.signal
         )
-        const subregionDate = resolveNearestAvailableDate(subregionMeta, selectedDate)
+        const subregionDate = resolveNearestAvailableDate(subregionMeta, regionalSnapshotDate)
 
         if (!subregionDate) {
           setExpandedCountryRows([])
@@ -340,7 +342,7 @@ const MiddleChartArea = () => {
     loadExpandedCountryRows()
 
     return () => controller.abort()
-  }, [expandedCountryName, selectedDate])
+  }, [expandedCountryName, regionalSnapshotDate])
 
   useEffect(() => {
     if (!expandedCountryName) {
@@ -379,15 +381,13 @@ const MiddleChartArea = () => {
     async function loadExpandedSubregionRows() {
       setIsExpandedSubregionRowsLoading(true)
       setExpandedSubregionRowsError('')
-      setExpandedSubregionRows([])
-      setExpandedSubregionRowsDate('')
 
       try {
         const thirdLevelMeta = await fetchWorldNestedMeta(
           [expandedCountryName, expandedSubregionName],
           controller.signal
         )
-        const thirdLevelDate = resolveNearestAvailableDate(thirdLevelMeta, selectedDate)
+        const thirdLevelDate = resolveNearestAvailableDate(thirdLevelMeta, regionalSnapshotDate)
 
         if (!thirdLevelDate) {
           return
@@ -428,7 +428,7 @@ const MiddleChartArea = () => {
     loadExpandedSubregionRows()
 
     return () => controller.abort()
-  }, [expandedCountryName, expandedSubregionName, selectedDate])
+  }, [expandedCountryName, expandedSubregionName, regionalSnapshotDate])
 
   useEffect(() => {
     if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0) {
