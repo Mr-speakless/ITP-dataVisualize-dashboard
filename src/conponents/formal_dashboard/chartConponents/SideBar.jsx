@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import ascendingIcon from '../../../assets/ascendingIcon.svg?raw'
 import descendingIcon from '../../../assets/descendingIcon.svg?raw'
 import expendIcon from '../../../assets/ExpendIcon.svg?raw'
@@ -20,24 +20,22 @@ function CountryRow({
   country,
   metric,
   sortMode,
+  timeMode,
   isSelected,
   onToggle,
   nestLevel = 0,
   isExpanded = false,
   onToggleExpand,
 }) {
-  const value = getSortValue(country, metric, sortMode)
+  const value = getSortValue(country, metric, sortMode, timeMode)
   const isNested = nestLevel > 0
   const flagUrl = isNested ? null : getFlagUrlForRegion(country.name)
   const nationalColor = getNationalColorForRegion(country.name)
-  const [hasFlagLoadError, setHasFlagLoadError] = useState(false)
+  const [failedFlagUrl, setFailedFlagUrl] = useState('')
+  const hasFlagLoadError = Boolean(flagUrl) && failedFlagUrl === flagUrl
   const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
   const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
   const isExpandable = Boolean(country.hasSubregions) && nestLevel < 2
-
-  useEffect(() => {
-    setHasFlagLoadError(false)
-  }, [flagUrl])
 
   return (
     <div
@@ -77,12 +75,13 @@ function CountryRow({
         >
           {flagUrl && !hasFlagLoadError ? (
             <img
+              key={flagUrl}
               src={flagUrl}
               alt=""
               className="h-full w-full object-cover"
               loading="lazy"
               decoding="async"
-              onError={() => setHasFlagLoadError(true)}
+              onError={() => setFailedFlagUrl(flagUrl ?? '__missing__')}
             />
           ) : (
             <span className="block h-[18px] w-[29px] bg-grey" />
@@ -156,6 +155,7 @@ const SideBar = ({
   isTopTenSelected,
   onResetSidebar,
   metric,
+  timeMode,
 }) => {
   if (!isOpen) {
     return null
@@ -311,6 +311,7 @@ const SideBar = ({
                     country={country}
                     metric={metric}
                     sortMode={sortMode}
+                    timeMode={timeMode}
                     isSelected={selectedCountries.includes(country.name)}
                     onToggle={onToggleCountry}
                     nestLevel={0}
@@ -320,27 +321,19 @@ const SideBar = ({
 
                   {isExpanded ? (
                     <div className="flex flex-col gap-1">
-                      {isExpandedCountryRowsLoading ? (
-                        <p className="ty-small pl-7 text-medium-grey">Loading regions...</p>
-                      ) : null}
-
-                      {!isExpandedCountryRowsLoading && expandedCountryRowsError ? (
+                      {expandedCountryRowsError && expandedCountryRows.length === 0 ? (
                         <p className="ty-small pl-7 text-medium-grey">
                           Unable to load regions: {expandedCountryRowsError}
                         </p>
                       ) : null}
 
-                      {!isExpandedCountryRowsLoading &&
-                      !expandedCountryRowsError &&
-                      expandedCountryRows.length === 0 ? (
+                      {!expandedCountryRowsError && expandedCountryRows.length === 0 ? (
                         <p className="ty-small pl-7 text-medium-grey">
                           No region-level data is available for this country.
                         </p>
                       ) : null}
 
-                      {!isExpandedCountryRowsLoading &&
-                      !expandedCountryRowsError &&
-                      expandedCountryRows.length > 0
+                      {expandedCountryRows.length > 0
                         ? expandedCountryRows.map((region) => (
                             <div
                               key={region.key ?? `${country.name}::${region.name}`}
@@ -350,6 +343,7 @@ const SideBar = ({
                                 country={region}
                                 metric={metric}
                                 sortMode={sortMode}
+                                timeMode={timeMode}
                                 isSelected={selectedCountries.includes(region.name)}
                                 onToggle={onToggleCountry}
                                 nestLevel={1}
@@ -359,30 +353,21 @@ const SideBar = ({
 
                               {expandedSubregionName === region.name ? (
                                 <div className="flex flex-col gap-1">
-                                  {isExpandedSubregionRowsLoading ? (
-                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
-                                      Loading third-level regions...
-                                    </p>
-                                  ) : null}
-
-                                  {!isExpandedSubregionRowsLoading &&
-                                  expandedSubregionRowsError ? (
+                                  {expandedSubregionRowsError &&
+                                  expandedSubregionRows.length === 0 ? (
                                     <p className="ty-small pl-[3.25rem] text-medium-grey">
                                       Unable to load third-level regions: {expandedSubregionRowsError}
                                     </p>
                                   ) : null}
 
-                                  {!isExpandedSubregionRowsLoading &&
-                                  !expandedSubregionRowsError &&
+                                  {!expandedSubregionRowsError &&
                                   expandedSubregionRows.length === 0 ? (
                                     <p className="ty-small pl-[3.25rem] text-medium-grey">
                                       No third-level region data is available.
                                     </p>
                                   ) : null}
 
-                                  {!isExpandedSubregionRowsLoading &&
-                                  !expandedSubregionRowsError &&
-                                  expandedSubregionRows.length > 0
+                                  {expandedSubregionRows.length > 0
                                     ? expandedSubregionRows.map((thirdRegion) => (
                                         <CountryRow
                                           key={
@@ -392,6 +377,7 @@ const SideBar = ({
                                           country={thirdRegion}
                                           metric={metric}
                                           sortMode={sortMode}
+                                          timeMode={timeMode}
                                           isSelected={selectedCountries.includes(
                                             thirdRegion.name
                                           )}
@@ -401,8 +387,14 @@ const SideBar = ({
                                       ))
                                     : null}
 
-                                  {!isExpandedSubregionRowsLoading &&
-                                  !expandedSubregionRowsError &&
+                                  {isExpandedSubregionRowsLoading &&
+                                  expandedSubregionRows.length > 0 ? (
+                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
+                                      Updating third-level regions...
+                                    </p>
+                                  ) : null}
+
+                                  {!expandedSubregionRowsError &&
                                   expandedSubregionRowsDate &&
                                   expandedSubregionRowsDate !== selectedDate ? (
                                     <p className="ty-small pl-[3.25rem] text-medium-grey">
@@ -416,8 +408,11 @@ const SideBar = ({
                           ))
                         : null}
 
-                      {!isExpandedCountryRowsLoading &&
-                      !expandedCountryRowsError &&
+                      {isExpandedCountryRowsLoading && expandedCountryRows.length > 0 ? (
+                        <p className="ty-small pl-7 text-medium-grey">Updating regions...</p>
+                      ) : null}
+
+                      {!expandedCountryRowsError &&
                       expandedCountryRowsDate &&
                       expandedCountryRowsDate !== selectedDate ? (
                         <p className="ty-small pl-7 text-medium-grey">

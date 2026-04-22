@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFlags.js'
+import { useCompactLayout } from '../hooks/useMediaQuery.js'
 
 function hexToRgb(hexColor) {
   const normalizedHex = hexColor.replace('#', '')
@@ -44,29 +45,6 @@ function buildCountryAbbreviation(countryName) {
   }
 
   return String(countryName ?? '').slice(0, 3).toUpperCase()
-}
-
-function useCompactLayout() {
-  const getInitialValue = () =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
-
-  const [isCompactLayout, setIsCompactLayout] = useState(getInitialValue)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined
-    }
-
-    const mediaQuery = window.matchMedia('(max-width: 639px)')
-    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
-
-    updateMatch()
-    mediaQuery.addEventListener('change', updateMatch)
-
-    return () => mediaQuery.removeEventListener('change', updateMatch)
-  }, [])
-
-  return isCompactLayout
 }
 
 function SelectedCountryChip({
@@ -137,18 +115,17 @@ function SelectedCountryChip({
 const SelectedCountryChips = ({ countries, onRemove }) => {
   const isCompactLayout = useCompactLayout()
   const [expandedCountryName, setExpandedCountryName] = useState('')
-
-  useEffect(() => {
+  const normalizedExpandedCountryName = useMemo(() => {
     if (!isCompactLayout) {
-      setExpandedCountryName('')
+      return ''
     }
-  }, [isCompactLayout])
 
-  useEffect(() => {
-    if (!countries.some((country) => country.name === expandedCountryName)) {
-      setExpandedCountryName('')
-    }
-  }, [countries, expandedCountryName])
+    const isExpandedCountryVisible = countries.some(
+      (country) => country.name === expandedCountryName
+    )
+
+    return isExpandedCountryVisible ? expandedCountryName : ''
+  }, [countries, expandedCountryName, isCompactLayout])
 
   if (countries.length === 0) {
     return null
@@ -161,7 +138,7 @@ const SelectedCountryChips = ({ countries, onRemove }) => {
           key={country.name}
           countryName={country.name}
           isCompactLayout={isCompactLayout}
-          isExpanded={expandedCountryName === country.name}
+          isExpanded={normalizedExpandedCountryName === country.name}
           onExpand={(countryValue) =>
             setExpandedCountryName((currentCountryName) =>
               currentCountryName === countryValue ? '' : countryValue

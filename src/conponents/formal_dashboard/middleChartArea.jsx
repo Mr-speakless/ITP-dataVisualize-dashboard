@@ -18,8 +18,6 @@ import {
   fetchWorldRegionSeries,
   fetchWorldDaySnapshot,
   fetchWorldMeta,
-  formatDashboardNumber,
-  getDisplayValue,
   getFallbackWorldDate,
   getSortValue,
   isDateAvailable,
@@ -34,10 +32,10 @@ const initialDisplayMode = {
 const initialSortMode = 'total'
 const initialSortDirection = 'desc'
 
-function sortCountries(countries, metric, sortMode, sortDirection) {
+function sortCountries(countries, metric, timeMode, sortMode, sortDirection) {
   return [...countries].sort((left, right) => {
-    const rightValue = getSortValue(right, metric, sortMode)
-    const leftValue = getSortValue(left, metric, sortMode)
+    const rightValue = getSortValue(right, metric, sortMode, timeMode)
+    const leftValue = getSortValue(left, metric, sortMode, timeMode)
 
     if (rightValue === leftValue) {
       return sortDirection === 'asc'
@@ -80,6 +78,22 @@ function resolveNearestAvailableDate(meta, targetDate) {
 
   const latestBeforeTarget = availableDates.filter((date) => date <= targetDate).at(-1)
   return latestBeforeTarget ?? availableDates[availableDates.length - 1]
+}
+
+function buildExpandedCountryFrameKey(countryName, snapshotDate) {
+  return `${countryName}::${snapshotDate}`
+}
+
+function buildExpandedCountryLatestKey(countryName) {
+  return `${countryName}::__latest__`
+}
+
+function buildExpandedSubregionFrameKey(countryName, subregionName, snapshotDate) {
+  return `${countryName}::${subregionName}::${snapshotDate}`
+}
+
+function buildExpandedSubregionLatestKey(countryName, subregionName) {
+  return `${countryName}::${subregionName}::__latest__`
 }
 
 function buildExpandedSelectionScope({
@@ -142,12 +156,13 @@ const MiddleChartArea = () => {
   const [worldSnapshotByDate, setWorldSnapshotByDate] = useState({})
   const [displayedMapCountries, setDisplayedMapCountries] = useState([])
   const [displayedMapDate, setDisplayedMapDate] = useState('')
-  const [isMetaLoading, setIsMetaLoading] = useState(true)
   const [isDayLoading, setIsDayLoading] = useState(true)
   const [isSeriesLoading, setIsSeriesLoading] = useState(false)
   const [error, setError] = useState('')
   const [seriesError, setSeriesError] = useState('')
   const pendingMapDatesRef = useRef(new Set())
+  const expandedCountryFrameCacheRef = useRef(new Map())
+  const expandedSubregionFrameCacheRef = useRef(new Map())
   const controlsRowRef = useRef(null)
   const regionalSnapshotDate = useMemo(
     () => (chart ? selectedDate : timelineDate || selectedDate),
@@ -158,7 +173,6 @@ const MiddleChartArea = () => {
     const controller = new AbortController()
 
     async function loadMeta() {
-      setIsMetaLoading(true)
       setError('')
 
       try {
@@ -177,8 +191,6 @@ const MiddleChartArea = () => {
               : 'Unknown error while loading world metadata'
           )
         }
-      } finally {
-        setIsMetaLoading(false)
       }
     }
 
@@ -250,10 +262,18 @@ const MiddleChartArea = () => {
       return
     }
 
-    pendingMapDatesRef.current.add(timelineDate)
+    const pendingMapDates = pendingMapDatesRef.current
+    pendingMapDates.add(timelineDate)
 
-    fetchWorldDaySnapshot(timelineDate)
+    const controller = new AbortController()
+    let isActive = true
+
+    fetchWorldDaySnapshot(timelineDate, controller.signal)
       .then((daySnapshot) => {
+        if (!isActive) {
+          return
+        }
+
         const countryRows = buildWorldCountryRows(meta, daySnapshot)
 
         setWorldSnapshotByDate((currentSnapshots) => {
@@ -268,15 +288,23 @@ const MiddleChartArea = () => {
         })
       })
       .catch((loadError) => {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'Unknown error while loading the map snapshot'
-        )
+        if (loadError.name !== 'AbortError' && isActive) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Unknown error while loading the map snapshot'
+          )
+        }
       })
       .finally(() => {
-        pendingMapDatesRef.current.delete(timelineDate)
+        pendingMapDates.delete(timelineDate)
       })
+
+    return () => {
+      isActive = false
+      controller.abort()
+      pendingMapDates.delete(timelineDate)
+    }
   }, [chart, meta, timelineDate, selectedDate, worldSnapshotByDate])
 
   useEffect(() => {
@@ -291,6 +319,20 @@ const MiddleChartArea = () => {
     const controller = new AbortController()
 
     async function loadExpandedCountryRows() {
+      const countryFrameKey = buildExpandedCountryFrameKey(
+        expandedCountryName,
+        regionalSnapshotDate
+      )
+      const countryLatestKey = buildExpandedCountryLatestKey(expandedCountryName)
+      const cachedFrame =
+        expandedCountryFrameCacheRef.current.get(countryFrameKey) ??
+        expandedCountryFrameCacheRef.current.get(countryLatestKey)
+
+      if (cachedFrame) {
+        setExpandedCountryRows(cachedFrame.rows)
+        setExpandedCountryRowsDate(cachedFrame.date)
+      }
+
       setIsExpandedCountryRowsLoading(true)
       setExpandedCountryRowsError('')
 
@@ -322,12 +364,17 @@ const MiddleChartArea = () => {
           }
         )
 
+        const nextFrame = {
+          date: subregionDate,
+          rows: subregionRows,
+        }
+        expandedCountryFrameCacheRef.current.set(countryFrameKey, nextFrame)
+        expandedCountryFrameCacheRef.current.set(countryLatestKey, nextFrame)
+
         setExpandedCountryRows(subregionRows)
         setExpandedCountryRowsDate(subregionDate)
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
-          setExpandedCountryRows([])
-          setExpandedCountryRowsDate('')
           setExpandedCountryRowsError(
             loadError instanceof Error
               ? loadError.message
@@ -379,6 +426,24 @@ const MiddleChartArea = () => {
     const controller = new AbortController()
 
     async function loadExpandedSubregionRows() {
+      const subregionFrameKey = buildExpandedSubregionFrameKey(
+        expandedCountryName,
+        expandedSubregionName,
+        regionalSnapshotDate
+      )
+      const subregionLatestKey = buildExpandedSubregionLatestKey(
+        expandedCountryName,
+        expandedSubregionName
+      )
+      const cachedFrame =
+        expandedSubregionFrameCacheRef.current.get(subregionFrameKey) ??
+        expandedSubregionFrameCacheRef.current.get(subregionLatestKey)
+
+      if (cachedFrame) {
+        setExpandedSubregionRows(cachedFrame.rows)
+        setExpandedSubregionRowsDate(cachedFrame.date)
+      }
+
       setIsExpandedSubregionRowsLoading(true)
       setExpandedSubregionRowsError('')
 
@@ -390,6 +455,8 @@ const MiddleChartArea = () => {
         const thirdLevelDate = resolveNearestAvailableDate(thirdLevelMeta, regionalSnapshotDate)
 
         if (!thirdLevelDate) {
+          setExpandedSubregionRows([])
+          setExpandedSubregionRowsDate('')
           return
         }
 
@@ -408,12 +475,17 @@ const MiddleChartArea = () => {
           }
         )
 
+        const nextFrame = {
+          date: thirdLevelDate,
+          rows: thirdLevelRows,
+        }
+        expandedSubregionFrameCacheRef.current.set(subregionFrameKey, nextFrame)
+        expandedSubregionFrameCacheRef.current.set(subregionLatestKey, nextFrame)
+
         setExpandedSubregionRows(thirdLevelRows)
         setExpandedSubregionRowsDate(thirdLevelDate)
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
-          setExpandedSubregionRows([])
-          setExpandedSubregionRowsDate('')
           setExpandedSubregionRowsError(
             loadError instanceof Error
               ? loadError.message
@@ -485,8 +557,8 @@ const MiddleChartArea = () => {
   }, [meta, selectedDate, timelineStartDate])
 
   const sortedCountries = useMemo(
-    () => sortCountries(countries, displayMode.metric, sortMode, sortDirection),
-    [countries, displayMode.metric, sortMode, sortDirection]
+    () => sortCountries(countries, displayMode.metric, displayMode.timeMode, sortMode, sortDirection),
+    [countries, displayMode.metric, displayMode.timeMode, sortMode, sortDirection]
   )
 
   const filteredCountries = useMemo(() => {
@@ -502,13 +574,27 @@ const MiddleChartArea = () => {
   }, [searchQuery, sortedCountries])
 
   const sortedExpandedCountryRows = useMemo(
-    () => sortCountries(expandedCountryRows, displayMode.metric, sortMode, sortDirection),
-    [displayMode.metric, expandedCountryRows, sortMode, sortDirection]
+    () =>
+      sortCountries(
+        expandedCountryRows,
+        displayMode.metric,
+        displayMode.timeMode,
+        sortMode,
+        sortDirection
+      ),
+    [displayMode.metric, displayMode.timeMode, expandedCountryRows, sortMode, sortDirection]
   )
 
   const sortedExpandedSubregionRows = useMemo(
-    () => sortCountries(expandedSubregionRows, displayMode.metric, sortMode, sortDirection),
-    [displayMode.metric, expandedSubregionRows, sortMode, sortDirection]
+    () =>
+      sortCountries(
+        expandedSubregionRows,
+        displayMode.metric,
+        displayMode.timeMode,
+        sortMode,
+        sortDirection
+      ),
+    [displayMode.metric, displayMode.timeMode, expandedSubregionRows, sortMode, sortDirection]
   )
 
   const filteredTopTenCountryNames = useMemo(
@@ -556,13 +642,20 @@ const MiddleChartArea = () => {
         return availableTopLevelSelection
       }
 
-      return sortCountries(countries, displayMode.metric, sortMode, sortDirection)
+      return sortCountries(
+        countries,
+        displayMode.metric,
+        displayMode.timeMode,
+        sortMode,
+        sortDirection
+      )
         .slice(0, 10)
         .map((country) => country.name)
     })
   }, [
     countries,
     displayMode.metric,
+    displayMode.timeMode,
     expandedCountryName,
     expandedSubregionName,
     sortedExpandedCountryRows,
@@ -785,23 +878,6 @@ const MiddleChartArea = () => {
     [countrySeriesByName, displayMode, selectedCountryRows, trendDates]
   )
 
-  const selectedCountriesDebug = selectedCountryRows.length
-    ? selectedCountryRows
-        .map(
-          (country) =>
-            `${country.name}: ${formatDashboardNumber(getDisplayValue(country, displayMode))}`
-        )
-        .join(' | ')
-    : 'No countries selected'
-
-  const statusText = isMetaLoading || isDayLoading
-    ? 'Loading world data...'
-    : isSeriesLoading
-      ? 'Loading trend lines...'
-      : isMapSnapshotLoading
-        ? 'Loading projection map...'
-      : error || seriesError || `Selected countries -> ${selectedCountriesDebug}`
-
   return (
     <section className="w-full bg-white py-6 sm:py-10">
       <div className="mx-auto flex w-full max-w-[1240px] flex-col items-start gap-5 px-4 sm:gap-6 sm:px-5">
@@ -924,11 +1000,18 @@ const MiddleChartArea = () => {
                   setExpandedSubregionRowsError('')
                   setSelectedCountries(
                     getTopTenCountryNames(
-                      sortCountries(countries, displayMode.metric, initialSortMode, initialSortDirection)
+                      sortCountries(
+                        countries,
+                        displayMode.metric,
+                        displayMode.timeMode,
+                        initialSortMode,
+                        initialSortDirection
+                      )
                     )
                   )
                 },
                 metric: displayMode.metric,
+                timeMode: displayMode.timeMode,
               }}
             />
           </div>

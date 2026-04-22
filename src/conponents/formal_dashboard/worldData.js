@@ -312,13 +312,21 @@ export function buildCountryTrendSeriesPoints(country, seriesItems, displayMode,
   })
 }
 
-export function getSortValue(country, metric, sortMode) {
+export function getSortValue(country, metric, sortMode, timeMode = 'to-date') {
   if (!country) {
     return 0
   }
 
-  return sortMode === 'per-100k'
-    ? country.per100kTotals[metric] ?? 0
+  const isDailyMode = timeMode === 'on-day'
+
+  if (sortMode === 'per-100k') {
+    return isDailyMode
+      ? country.per100kDaily[metric] ?? 0
+      : country.per100kTotals[metric] ?? 0
+  }
+
+  return isDailyMode
+    ? country.daily[metric] ?? 0
     : country.totals[metric] ?? 0
 }
 

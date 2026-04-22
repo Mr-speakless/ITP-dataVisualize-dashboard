@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   formatDashboardNumber,
   getTimeModeLabel,
 } from '../worldData.js'
+import { useCompactLayout } from '../hooks/useMediaQuery.js'
 
 const chartWidth = 1100
 const gridSegments = 10
@@ -143,23 +144,7 @@ export default function CountryTrendChart({
   const containerRef = useRef(null)
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [hoveredPointer, setHoveredPointer] = useState(null)
-  const [isCompactLayout, setIsCompactLayout] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
-  )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined
-    }
-
-    const mediaQuery = window.matchMedia('(max-width: 639px)')
-    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
-
-    updateMatch()
-    mediaQuery.addEventListener('change', updateMatch)
-
-    return () => mediaQuery.removeEventListener('change', updateMatch)
-  }, [])
+  const isCompactLayout = useCompactLayout()
 
   const chartHeight = isCompactLayout ? 520 : 420
   const chartMargin = isCompactLayout
@@ -211,7 +196,7 @@ export default function CountryTrendChart({
         points,
       }
     })
-  }, [dates.length, innerHeight, innerWidth, series, yAxis.max])
+  }, [chartMargin.left, chartMargin.top, dates.length, innerHeight, innerWidth, series, yAxis.max])
 
   const hasHighlightedSeries = useMemo(
     () =>
@@ -249,7 +234,7 @@ export default function CountryTrendChart({
 
         return right.value - left.value
       })
-  }, [hoveredIndex, innerHeight, plottedSeries])
+  }, [chartMargin.top, hoveredIndex, innerHeight, plottedSeries])
 
   const tooltipColumnCount =
     isCompactLayout ? 1 : hoveredEntries.length > 8 ? 2 : 1
@@ -272,7 +257,7 @@ export default function CountryTrendChart({
     }
 
     const tooltipWidth = isCompactLayout ? 220 : tooltipColumnCount === 2 ? 460 : 220
-    const containerWidth = containerRef.current?.clientWidth ?? tooltipWidth
+    const containerWidth = hoveredPointer.containerWidth ?? tooltipWidth
     const tooltipLeft = clamp(
       hoveredPointer.x - (isCompactLayout ? tooltipWidth / 2 : tooltipWidth + 20),
       8,
@@ -511,10 +496,11 @@ export default function CountryTrendChart({
               dates.length === 1 ? 0 : Math.round(relativeX * (dates.length - 1))
 
             setHoveredIndex(nextIndex)
-            setHoveredPointer({
-              x: event.clientX - svgBounds.left,
-              y: event.clientY - svgBounds.top,
-            })
+              setHoveredPointer({
+                x: event.clientX - svgBounds.left,
+                y: event.clientY - svgBounds.top,
+                containerWidth: svgBounds.width,
+              })
           }}
           onPointerDown={(event) => {
             if (!isCompactLayout || dates.length === 0) {

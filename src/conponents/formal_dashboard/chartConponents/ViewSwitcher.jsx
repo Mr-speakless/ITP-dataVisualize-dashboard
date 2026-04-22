@@ -27,7 +27,7 @@ const controlGroups = [
   },
 ]
 
-function getMobileSelectClassName(groupKey) {
+function getMobileSelectClassName() {
   return `ty-small h-7 w-full appearance-none border-0 bg-transparent pl-0 pr-4 text-black outline-none`
 }
 
@@ -80,7 +80,7 @@ function MobileSelectGroup({ group, value, onChange }) {
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={getMobileSelectClassName(group.key)}
+        className={getMobileSelectClassName()}
         aria-label={group.key}
       >
         {group.options.map((option) => (

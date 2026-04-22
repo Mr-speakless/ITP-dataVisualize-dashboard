@@ -33,12 +33,18 @@ const DataFilterBar = ({
   }, [sidebarAnchorRef])
 
   useEffect(() => {
-    updateSidebarLayout()
+    const layoutRafId =
+      typeof window !== 'undefined'
+        ? window.requestAnimationFrame(updateSidebarLayout)
+        : null
 
     const containerElement = containerRef.current
     const anchorElement = sidebarAnchorRef?.current
 
     if (!containerElement || !anchorElement || typeof ResizeObserver === 'undefined') {
+      if (layoutRafId != null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(layoutRafId)
+      }
       return undefined
     }
 
@@ -53,6 +59,9 @@ const DataFilterBar = ({
     window.addEventListener('scroll', updateSidebarLayout, true)
 
     return () => {
+      if (layoutRafId != null) {
+        window.cancelAnimationFrame(layoutRafId)
+      }
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateSidebarLayout)
       window.removeEventListener('scroll', updateSidebarLayout, true)

@@ -31,6 +31,7 @@ import {
   getTimeModeLabel,
 } from '../worldData.js'
 import { getCountryCodeForRegion, getNationalColorForRegion } from '../countryFlags.js'
+import { useCompactLayout } from '../hooks/useMediaQuery.js'
 
 const usaMapRawByModulePath = import.meta.glob('../../../assets/USAmap/*.svg', {
   eager: true,
@@ -42,6 +43,7 @@ const heatScaleColors = ['#eaf6fb', '#c4e0ed', '#87bfd4', '#3a88a8', '#0b4662']
 const noDataFillColor = '#dde7ec'
 const mapSvgClassName = 'world-projection-map-svg'
 const fittedSvgByRawMarkup = new Map()
+const stableRegionalFrameByScope = new Map()
 
 function prepareMapSvg(svgRaw = '') {
   return String(svgRaw ?? '')
@@ -594,7 +596,7 @@ function normalizeMapLookupName(value) {
   return String(value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x00-\x7F]/g, ' ')
+    .replace(/[^\u0020-\u007E]/g, ' ')
     .replace(/\*/g, '')
     .replace(/&/g, ' and ')
     .replace(/[().,'-]/g, ' ')
@@ -1308,33 +1310,15 @@ export default function WorldProjectionMap({
   selectedCountries = [],
   timelineDate = '',
   isLoading = false,
-  isUpdating = false,
   error = '',
   hoveredCountryName = '',
   onHoverCountryChange,
   onToggleCountry,
 }) {
   const containerRef = useRef(null)
-  const [hoveredWorldCountryCode, setHoveredWorldCountryCode] = useState(null)
-  const [hoveredRegionalCountryName, setHoveredRegionalCountryName] = useState('')
+  const [localHoveredCountryName, setLocalHoveredCountryName] = useState('')
   const [hoveredPointer, setHoveredPointer] = useState(null)
-  const [isCompactLayout, setIsCompactLayout] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
-  )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined
-    }
-
-    const mediaQuery = window.matchMedia('(max-width: 639px)')
-    const updateMatch = () => setIsCompactLayout(mediaQuery.matches)
-
-    updateMatch()
-    mediaQuery.addEventListener('change', updateMatch)
-
-    return () => mediaQuery.removeEventListener('change', updateMatch)
-  }, [])
+  const isCompactLayout = useCompactLayout()
 
   const normalizedFocusedCountryName = useMemo(
     () => normalizeMapLookupName(focusedCountryName),
@@ -1391,9 +1375,6 @@ export default function WorldProjectionMap({
     () => buildSelectedCodeSet(selectedCountries),
     [selectedCountries]
   )
-  const hoveredWorldCountry = hoveredWorldCountryCode
-    ? worldCountryByCode[hoveredWorldCountryCode]
-    : null
 
   const regionalPathEntries = useMemo(
     () => buildRegionalPathEntries(preparedRegionalMapSvg),
@@ -1431,33 +1412,64 @@ export default function WorldProjectionMap({
     [regionalCountryBindings]
   )
   const hasRegionalMap = hasRegionalMapAsset && regionalCountryBindings.length > 0
-  const displayedCountries = hasRegionalMap ? activeRegionalCountries : countries
+  const regionalScopeKey = useMemo(
+    () =>
+      usesUsaSubregionMap
+        ? `usa-state:${focusedUsaStateCode ?? normalizeMapLookupName(focusedSubregionName)}`
+        : `country:${normalizeMapLookupName(focusedCountryName)}`,
+    [focusedCountryName, focusedSubregionName, focusedUsaStateCode, usesUsaSubregionMap]
+  )
+  const currentFrameCountries = hasRegionalMap ? activeRegionalCountries : countries
   const selectedCountryNames = useMemo(
     () => buildSelectedNameSet(selectedCountries),
     [selectedCountries]
   )
-  const hoveredRegionalCountry = hoveredRegionalCountryName
-    ? activeRegionalCountries.find((country) => country.name === hoveredRegionalCountryName) ?? null
-    : null
+  const effectiveHoveredCountryName = hoveredCountryName || localHoveredCountryName
+  const currentHoveredRegionalCountryName = useMemo(() => {
+    if (!hasRegionalMap || !effectiveHoveredCountryName) {
+      return ''
+    }
 
-  const legendScale = useMemo(
-    () => buildLegendScale(displayedCountries, displayMode),
-    [displayMode, displayedCountries]
+    const normalizedHoveredCountryName = normalizeMapLookupName(effectiveHoveredCountryName)
+    return regionalCountryByNormalizedName.get(normalizedHoveredCountryName)?.name ?? ''
+  }, [effectiveHoveredCountryName, hasRegionalMap, regionalCountryByNormalizedName])
+  const currentLegendScale = useMemo(
+    () => buildLegendScale(currentFrameCountries, displayMode),
+    [currentFrameCountries, displayMode]
   )
-  const legendBoundaries = useMemo(
-    () => buildLegendBoundaries(legendScale.levels),
-    [legendScale.levels]
+  const currentLegendBoundaries = useMemo(
+    () => buildLegendBoundaries(currentLegendScale.levels),
+    [currentLegendScale.levels]
   )
+  const hoveredWorldCountryCode = useMemo(() => {
+    if (hasRegionalMap || !effectiveHoveredCountryName) {
+      return null
+    }
+
+    const countryCode = getCountryCodeForRegion(effectiveHoveredCountryName)
+
+    if (!countryCode || !worldCountryByCode[countryCode]) {
+      return null
+    }
+
+    return countryCode
+  }, [effectiveHoveredCountryName, hasRegionalMap, worldCountryByCode])
   const styledWorldMapSvg = useMemo(
     () =>
       buildStyledWorldMapSvg(
         worldCountryByCode,
         selectedCountryCodes,
         hoveredWorldCountryCode,
-        legendScale,
+        currentLegendScale,
         displayMode
       ),
-    [worldCountryByCode, selectedCountryCodes, hoveredWorldCountryCode, legendScale, displayMode]
+    [
+      worldCountryByCode,
+      selectedCountryCodes,
+      hoveredWorldCountryCode,
+      currentLegendScale,
+      displayMode,
+    ]
   )
   const styledRegionalMapSvg = useMemo(
     () =>
@@ -1465,23 +1477,104 @@ export default function WorldProjectionMap({
         preparedRegionalMapSvg,
         regionalCountryBindings,
         selectedCountryNames,
-        hoveredRegionalCountryName,
-        legendScale,
+        currentHoveredRegionalCountryName,
+        currentLegendScale,
         displayMode
       ),
     [
       preparedRegionalMapSvg,
       regionalCountryBindings,
       selectedCountryNames,
-      hoveredRegionalCountryName,
-      legendScale,
+      currentHoveredRegionalCountryName,
+      currentLegendScale,
       displayMode,
     ]
   )
-  const activeMapSvg = hasRegionalMap ? styledRegionalMapSvg : styledWorldMapSvg
+  if (hasRegionalMap) {
+    const stableRegionalFrame = {
+      activeRegionalMapLabel,
+      countries: activeRegionalCountries,
+      legendBoundaries: currentLegendBoundaries,
+      legendScale: currentLegendScale,
+      mapSvg: styledRegionalMapSvg,
+      regionalCountryByNormalizedName,
+      regionalCountryByPathNormalizedName,
+    }
+
+    stableRegionalFrameByScope.set(regionalScopeKey, stableRegionalFrame)
+    stableRegionalFrameByScope.set('__latest__', stableRegionalFrame)
+  }
+
+  const fallbackRegionalFrame =
+    !hasRegionalMap && focusedCountryName
+      ? stableRegionalFrameByScope.get(regionalScopeKey) ??
+        stableRegionalFrameByScope.get('__latest__')
+      : null
+  const rendersRegionalMap = hasRegionalMap || Boolean(fallbackRegionalFrame)
+  const activeRegionalDisplayLabel =
+    hasRegionalMap
+      ? activeRegionalMapLabel
+      : fallbackRegionalFrame?.activeRegionalMapLabel ?? ''
+  const displayedCountries = useMemo(
+    () =>
+      rendersRegionalMap
+        ? hasRegionalMap
+          ? activeRegionalCountries
+          : fallbackRegionalFrame?.countries ?? []
+        : countries,
+    [activeRegionalCountries, countries, fallbackRegionalFrame, hasRegionalMap, rendersRegionalMap]
+  )
+  const displayedRegionalCountryByNormalizedName = useMemo(
+    () =>
+      hasRegionalMap
+        ? regionalCountryByNormalizedName
+        : fallbackRegionalFrame?.regionalCountryByNormalizedName ?? new Map(),
+    [fallbackRegionalFrame, hasRegionalMap, regionalCountryByNormalizedName]
+  )
+  const displayedRegionalCountryByPathNormalizedName = useMemo(
+    () =>
+      hasRegionalMap
+        ? regionalCountryByPathNormalizedName
+        : fallbackRegionalFrame?.regionalCountryByPathNormalizedName ?? new Map(),
+    [fallbackRegionalFrame, hasRegionalMap, regionalCountryByPathNormalizedName]
+  )
+  const legendScale = rendersRegionalMap
+    ? hasRegionalMap
+      ? currentLegendScale
+      : fallbackRegionalFrame?.legendScale ?? currentLegendScale
+    : currentLegendScale
+  const legendBoundaries = rendersRegionalMap
+    ? hasRegionalMap
+      ? currentLegendBoundaries
+      : fallbackRegionalFrame?.legendBoundaries ?? currentLegendBoundaries
+    : currentLegendBoundaries
+  const activeMapSvg = rendersRegionalMap
+    ? hasRegionalMap
+      ? styledRegionalMapSvg
+      : fallbackRegionalFrame?.mapSvg ?? styledWorldMapSvg
+    : styledWorldMapSvg
+  const currentMapKey = useMemo(
+    () =>
+      `${rendersRegionalMap ? 'regional' : 'world'}:${activeRegionalDisplayLabel || 'world'}`,
+    [activeRegionalDisplayLabel, rendersRegionalMap]
+  )
   const mapAspectRatio = useMemo(() => extractSvgAspectRatio(activeMapSvg), [activeMapSvg])
   const [mapViewportSize, setMapViewportSize] = useState({ height: 0, width: 0 })
-  const hoveredCountry = hasRegionalMap ? hoveredRegionalCountry : hoveredWorldCountry
+  const hoveredWorldCountry = hoveredWorldCountryCode
+    ? worldCountryByCode[hoveredWorldCountryCode]
+    : null
+  const hoveredRegionalCountryName = useMemo(() => {
+    if (!rendersRegionalMap || !effectiveHoveredCountryName) {
+      return ''
+    }
+
+    const normalizedHoveredCountryName = normalizeMapLookupName(effectiveHoveredCountryName)
+    return displayedRegionalCountryByNormalizedName.get(normalizedHoveredCountryName)?.name ?? ''
+  }, [displayedRegionalCountryByNormalizedName, effectiveHoveredCountryName, rendersRegionalMap])
+  const hoveredRegionalCountry = hoveredRegionalCountryName
+    ? displayedCountries.find((country) => country.name === hoveredRegionalCountryName) ?? null
+    : null
+  const hoveredCountry = rendersRegionalMap ? hoveredRegionalCountry : hoveredWorldCountry
   const selectedCountryEntries = useMemo(() => {
     const countriesByName = new Map(displayedCountries.map((country) => [country.name, country]))
 
@@ -1503,29 +1596,23 @@ export default function WorldProjectionMap({
   }, [displayMode, displayedCountries, selectedCountries])
 
   useEffect(() => {
-    setHoveredWorldCountryCode(null)
-    setHoveredRegionalCountryName('')
-    setHoveredPointer(null)
-  }, [activeRegionalMapLabel, hasRegionalMap])
-
-  useEffect(() => {
     if (typeof window === 'undefined' || !containerRef.current) {
       return undefined
     }
 
     const containerElement = containerRef.current
     const minHeight = isCompactLayout
-      ? hasRegionalMap
+      ? rendersRegionalMap
         ? 280
         : 240
-      : hasRegionalMap
+      : rendersRegionalMap
         ? 360
         : 320
     const maxHeight = isCompactLayout
-      ? hasRegionalMap
+      ? rendersRegionalMap
         ? 520
         : 440
-      : hasRegionalMap
+      : rendersRegionalMap
         ? 780
         : 680
 
@@ -1567,39 +1654,7 @@ export default function WorldProjectionMap({
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateViewportSize)
     }
-  }, [hasRegionalMap, isCompactLayout, mapAspectRatio])
-
-  useEffect(() => {
-    if (!hoveredCountryName) {
-      setHoveredWorldCountryCode(null)
-      setHoveredRegionalCountryName('')
-      return
-    }
-
-    if (hasRegionalMap) {
-      const normalizedHoveredCountryName = normalizeMapLookupName(hoveredCountryName)
-
-      if (regionalCountryByNormalizedName.has(normalizedHoveredCountryName)) {
-        setHoveredRegionalCountryName(
-          regionalCountryByNormalizedName.get(normalizedHoveredCountryName).name
-        )
-      } else {
-        setHoveredRegionalCountryName('')
-      }
-
-      setHoveredWorldCountryCode(null)
-      return
-    }
-
-    const hoveredCountryCodeFromName = getCountryCodeForRegion(hoveredCountryName)
-
-    if (!hoveredCountryCodeFromName || !worldCountryByCode[hoveredCountryCodeFromName]) {
-      setHoveredWorldCountryCode(null)
-      return
-    }
-
-    setHoveredWorldCountryCode(hoveredCountryCodeFromName)
-  }, [hasRegionalMap, hoveredCountryName, regionalCountryByNormalizedName, worldCountryByCode])
+  }, [isCompactLayout, mapAspectRatio, rendersRegionalMap])
 
   if (error && displayedCountries.length === 0) {
     return (
@@ -1630,7 +1685,11 @@ export default function WorldProjectionMap({
       <div
         ref={containerRef}
         className="relative flex w-full items-center justify-center overflow-hidden rounded-[4px] bg-[#dfe7ec]"
-        aria-label={hasRegionalMap ? `${activeRegionalMapLabel} projection map` : 'World projection map'}
+        aria-label={
+          rendersRegionalMap
+            ? `${activeRegionalDisplayLabel || 'Regional'} projection map`
+            : 'World projection map'
+        }
         style={
           mapViewportSize.height > 0
             ? { height: `${mapViewportSize.height}px` }
@@ -1641,8 +1700,7 @@ export default function WorldProjectionMap({
             return
           }
 
-          setHoveredWorldCountryCode(null)
-          setHoveredRegionalCountryName('')
+          setLocalHoveredCountryName('')
           setHoveredPointer(null)
           onHoverCountryChange?.('')
         }}
@@ -1654,18 +1712,17 @@ export default function WorldProjectionMap({
           const path = event.target.closest?.('path')
 
           if (!path || !containerRef.current?.contains(path)) {
-            setHoveredWorldCountryCode(null)
-            setHoveredRegionalCountryName('')
+            setLocalHoveredCountryName('')
             setHoveredPointer(null)
             onHoverCountryChange?.('')
             return
           }
 
-          const hoveredRegion = hasRegionalMap
+          const hoveredRegion = rendersRegionalMap
             ? resolveRegionalCountryFromElement(
                 path,
-                regionalCountryByPathNormalizedName,
-                regionalCountryByNormalizedName
+                displayedRegionalCountryByPathNormalizedName,
+                displayedRegionalCountryByNormalizedName
               )
             : (() => {
                 const countryCode = resolveWorldMapCodeFromElement(path, worldCountryByCode)
@@ -1673,27 +1730,20 @@ export default function WorldProjectionMap({
               })()
 
           if (!hoveredRegion) {
-            setHoveredWorldCountryCode(null)
-            setHoveredRegionalCountryName('')
+            setLocalHoveredCountryName('')
             setHoveredPointer(null)
             onHoverCountryChange?.('')
             return
           }
 
           const bounds = containerRef.current.getBoundingClientRect()
-
-          if (hasRegionalMap) {
-            setHoveredRegionalCountryName(hoveredRegion.name)
-            setHoveredWorldCountryCode(null)
-          } else {
-            const hoveredCountryCode = getCountryCodeForRegion(hoveredRegion.name)
-            setHoveredWorldCountryCode(hoveredCountryCode)
-            setHoveredRegionalCountryName('')
-          }
+          setLocalHoveredCountryName(hoveredRegion.name)
 
           setHoveredPointer({
             x: event.clientX - bounds.left,
             y: event.clientY - bounds.top,
+            containerWidth: bounds.width,
+            mapKey: currentMapKey,
           })
           onHoverCountryChange?.(hoveredRegion.name)
         }}
@@ -1704,11 +1754,11 @@ export default function WorldProjectionMap({
             return
           }
 
-          const clickedRegion = hasRegionalMap
+          const clickedRegion = rendersRegionalMap
             ? resolveRegionalCountryFromElement(
                 path,
-                regionalCountryByPathNormalizedName,
-                regionalCountryByNormalizedName
+                displayedRegionalCountryByPathNormalizedName,
+                displayedRegionalCountryByNormalizedName
               )
             : (() => {
                 const countryCode = resolveWorldMapCodeFromElement(path, worldCountryByCode)
@@ -1762,14 +1812,17 @@ export default function WorldProjectionMap({
           </div>
         </div>
 
-        {!isCompactLayout && hoveredCountry && hoveredPointer ? (
+        {!isCompactLayout &&
+        hoveredCountry &&
+        hoveredPointer &&
+        hoveredPointer.mapKey === currentMapKey ? (
           <div
             className="pointer-events-none absolute z-20 max-w-[220px] rounded-[10px] bg-white/90 px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.25)] backdrop-blur-[5px] sm:max-w-[280px] sm:px-5 sm:py-3"
             style={{
               left: `${clamp(
                 hoveredPointer.x + 12,
                 12,
-                Math.max((containerRef.current?.clientWidth ?? 320) - 232, 12)
+                Math.max((hoveredPointer.containerWidth ?? 320) - 232, 12)
               )}px`,
               top: `${Math.max(hoveredPointer.y + 12, 48)}px`,
             }}

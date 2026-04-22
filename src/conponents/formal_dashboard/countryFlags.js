@@ -1,4 +1,4 @@
-const publicBaseUrl = import.meta.env.BASE_URL || '/'
+﻿const publicBaseUrl = import.meta.env.BASE_URL || '/'
 const flagAssetVersion = '20260303'
 
 function buildFlagUrl(countryCode) {
@@ -30,7 +30,7 @@ const countryCodeOverrides = {
   'Congo (Brazzaville)': 'CG',
   'Congo (Kinshasa)': 'CD',
   "Cote d'Ivoire": 'CI',
-  "Côte d'Ivoire": 'CI',
+  "C么te d'Ivoire": 'CI',
   Czechia: 'CZ',
   'East Timor': 'TL',
   Eswatini: 'SZ',
@@ -61,9 +61,7 @@ const countryCodeOverrides = {
   Taiwan: 'TW',
   'Korea, South': 'KR',
   'Korea, North': 'KP',
-  Russia: 'RU',
-  Turkey: 'TR',
-  Türkiye: 'TR',
+  T眉rkiye: 'TR',
   Venezuela: 'VE',
   Macau: 'MO',
   'Hong Kong': 'HK',
@@ -357,3 +355,4 @@ export function getNationalColorForRegion(regionName) {
 
   return nationalColorHexByCode[countryCode] ?? getFallbackNationalColor(countryCode)
 }
+
