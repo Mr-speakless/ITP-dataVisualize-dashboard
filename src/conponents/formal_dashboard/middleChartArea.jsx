@@ -8,6 +8,7 @@ import TimeProgressBar from './chartConponents/TimeProgressBar.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import WorldProjectionMap from './chartConponents/WorldProjectionMap.jsx'
 import NycBoroughMap from './chartConponents/NycBoroughMap.jsx'
+import NycZipcodeMap from './chartConponents/NycZipcodeMap.jsx'
 import { useNestedRegionLevel, useNycCityRow } from './hooks/useNestedRegionLevel.js'
 import {
   DEFAULT_WORLD_DATE,
@@ -906,6 +907,19 @@ const MiddleChartArea = () => {
               isLoading={isSeriesLoading}
               error={error || seriesError}
               highlightedCountryName={hoveredCountryName}
+            />
+          ) : level4Name === 'New York City' && level5Name ? (
+            <NycZipcodeMap
+              regions={sortedLevel5Rows}
+              boroughName={level5Name}
+              displayMode={displayMode}
+              selectedCountries={selectedCountries}
+              timelineDate={mapDisplayDate}
+              isLoading={level5.isLoading && sortedLevel5Rows.length === 0}
+              error={level5.error}
+              hoveredCountryName={hoveredCountryName}
+              onHoverCountryChange={setHoveredCountryName}
+              onToggleCountry={handleToggleRegionSelection}
             />
           ) : level4Name === 'New York City' ? (
             <NycBoroughMap
