@@ -7,6 +7,7 @@ import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
 import TimeProgressBar from './chartConponents/TimeProgressBar.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import WorldProjectionMap from './chartConponents/WorldProjectionMap.jsx'
+import NycBoroughMap from './chartConponents/NycBoroughMap.jsx'
 import { useNestedRegionLevel, useNycCityRow } from './hooks/useNestedRegionLevel.js'
 import {
   DEFAULT_WORLD_DATE,
@@ -587,11 +588,22 @@ const MiddleChartArea = () => {
 
       if (isSelecting && regionLevelNumber >= 3) {
         const ancestorNames = new Set(regionRow?.seriesPathHierarchy ?? [])
+        const ownLevelIndex = regionLevelNumber - 2
+        // NYC boroughs share names with JHU counties (Queens, Bronx, ...). A
+        // name that also appears at the selected row's own level is ambiguous,
+        // so never treat it as a shallower sibling to drop.
+        const ownLevelNames = new Set(
+          (sortedDrillRows[ownLevelIndex] ?? []).map((region) => region.name)
+        )
         const shallowerRowNames = new Set()
 
         sortedDrillRows.forEach((levelRows, index) => {
-          if (index + 2 < regionLevelNumber) {
-            levelRows.forEach((region) => shallowerRowNames.add(region.name))
+          if (index < ownLevelIndex) {
+            levelRows.forEach((region) => {
+              if (!ownLevelNames.has(region.name)) {
+                shallowerRowNames.add(region.name)
+              }
+            })
           }
         })
 
@@ -894,6 +906,18 @@ const MiddleChartArea = () => {
               isLoading={isSeriesLoading}
               error={error || seriesError}
               highlightedCountryName={hoveredCountryName}
+            />
+          ) : level4Name === 'New York City' ? (
+            <NycBoroughMap
+              regions={sortedLevel4Rows}
+              displayMode={displayMode}
+              selectedCountries={selectedCountries}
+              timelineDate={mapDisplayDate}
+              isLoading={level4.isLoading && sortedLevel4Rows.length === 0}
+              error={level4.error}
+              hoveredCountryName={hoveredCountryName}
+              onHoverCountryChange={setHoveredCountryName}
+              onToggleCountry={handleToggleRegionSelection}
             />
           ) : (
             <WorldProjectionMap
