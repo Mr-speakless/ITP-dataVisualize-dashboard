@@ -3,6 +3,12 @@ const worldDataPath = 'c_data/world'
 
 export const DEFAULT_WORLD_DATE = '2023-03-09'
 
+// The data warehouse is served from a CDN (jsDelivr). On the first hit to a
+// cold branch path the CDN can answer 503/504 while it warms from origin,
+// then succeed on an immediate retry. Retry a few times before giving up.
+const MAX_FETCH_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 400
+
 function buildWorldBaseUrl(relativePath = worldDataPath) {
   if (!dataPrefix) {
     throw new Error('Missing VITE_C19_C_DATA in .env')
@@ -13,14 +19,74 @@ function buildWorldBaseUrl(relativePath = worldDataPath) {
   return `${normalizedDataPrefix}/${normalizedRelativePath}`
 }
 
-async function fetchWorldJson(path, signal, relativePath = worldDataPath) {
-  const response = await fetch(`${buildWorldBaseUrl(relativePath)}/${path}`, { signal })
+function delayWithSignal(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
 
-  if (!response.ok) {
-    throw new Error(`World data request failed with status ${response.status}`)
+    const onAbort = () => {
+      clearTimeout(timeoutId)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function isRetryableStatus(status) {
+  return status === 429 || (status >= 500 && status <= 599)
+}
+
+async function fetchWorldJson(path, signal, relativePath = worldDataPath) {
+  const url = `${buildWorldBaseUrl(relativePath)}/${path}`
+  let lastError
+
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
+    let response
+
+    try {
+      response = await fetch(url, { signal })
+    } catch (error) {
+      // A caller-triggered abort must surface immediately, never be retried.
+      if (error?.name === 'AbortError') {
+        throw error
+      }
+
+      lastError = error
+
+      if (attempt === MAX_FETCH_ATTEMPTS) {
+        throw error
+      }
+
+      await delayWithSignal(RETRY_BASE_DELAY_MS * attempt, signal)
+      continue
+    }
+
+    if (response.ok) {
+      return response.json()
+    }
+
+    const statusError = new Error(
+      `World data request failed with status ${response.status}`
+    )
+
+    // 4xx (e.g. a genuinely missing file) will not fix itself on retry.
+    if (!isRetryableStatus(response.status) || attempt === MAX_FETCH_ATTEMPTS) {
+      throw statusError
+    }
+
+    lastError = statusError
+    await delayWithSignal(RETRY_BASE_DELAY_MS * attempt, signal)
   }
 
-  return response.json()
+  throw lastError
 }
 
 function computePer100k(value, population) {
