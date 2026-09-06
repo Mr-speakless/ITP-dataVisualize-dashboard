@@ -16,6 +16,18 @@ import { getFlagUrlForRegion, getNationalColorForRegion } from '../countryFlags.
 const iconClassName =
   'shrink-0 text-inherit [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-current'
 
+// Deepest nest level that can still be expanded (0 = country ... 3 = NYC
+// borough; level 4 = zipcode is a leaf).
+const MAX_EXPANDABLE_NEST_LEVEL = 3
+
+function getNestIndentStyle(nestLevel) {
+  if (nestLevel <= 0) {
+    return undefined
+  }
+
+  return { paddingLeft: `${1.75 + (nestLevel - 1) * 1.5}rem` }
+}
+
 function CountryRow({
   country,
   metric,
@@ -35,7 +47,8 @@ function CountryRow({
   const hasFlagLoadError = Boolean(flagUrl) && failedFlagUrl === flagUrl
   const selectionIndicatorClassName = isSelected ? '' : 'bg-white'
   const selectionIndicatorStyle = isSelected ? { backgroundColor: nationalColor } : undefined
-  const isExpandable = Boolean(country.hasSubregions) && nestLevel < 2
+  const isExpandable =
+    Boolean(country.hasSubregions) && nestLevel <= MAX_EXPANDABLE_NEST_LEVEL
 
   return (
     <div
@@ -57,8 +70,9 @@ function CountryRow({
           ? 'grid-cols-[20px_minmax(0,1fr)_minmax(96px,auto)]'
           : 'grid-cols-[20px_30px_minmax(0,1fr)_minmax(96px,auto)]'
       } items-center gap-2 rounded-[5px] py-1 text-left text-black opacity-100 ${
-        nestLevel === 2 ? 'pl-[3.25rem] pr-1' : isNested ? 'pl-7 pr-1' : 'px-1'
+        isNested ? 'pr-1' : 'px-1'
       }`}
+      style={getNestIndentStyle(nestLevel)}
       aria-pressed={isSelected}
       aria-label={`${isNested ? 'Region' : 'Country'} ${country.name}`}
       data-name="CountryRow"
@@ -115,11 +129,94 @@ function CountryRow({
           </button>
         </div>
       ) : (
-        <div className="min-w-0">
-          <span className="ty-small truncate text-black">{country.name}</span>
+        <div className="min-w-0 truncate">
+          <span className="ty-small text-black">{country.name}</span>
+          {country.caption ? (
+            <span className="ty-small text-medium-grey"> · {country.caption}</span>
+          ) : null}
         </div>
       )}
       <span className="ty-small text-right text-black">{formatDashboardNumber(value)}</span>
+    </div>
+  )
+}
+
+// Renders the children of an expanded row: `level` is the drill level holding
+// those child rows; `rowsNestLevel` is their indentation depth. Recurses when a
+// child row is itself expanded.
+function DrillLevelBody({
+  level,
+  rowsNestLevel,
+  drillLevels,
+  selectedCountries,
+  onToggleCountry,
+  onToggleExpansion,
+  metric,
+  sortMode,
+  timeMode,
+  selectedDate,
+}) {
+  const rows = Array.isArray(level?.rows) ? level.rows : []
+  const messageIndentStyle = getNestIndentStyle(rowsNestLevel)
+
+  return (
+    <div className="flex flex-col gap-1">
+      {!level?.isLoading && level?.error && rows.length === 0 ? (
+        <p className="ty-small text-medium-grey" style={messageIndentStyle}>
+          Unable to load regions: {level.error}
+        </p>
+      ) : null}
+
+      {!level?.isLoading && !level?.error && rows.length === 0 ? (
+        <p className="ty-small text-medium-grey" style={messageIndentStyle}>
+          No further region breakdown is available here.
+        </p>
+      ) : null}
+
+      {rows.map((region) => {
+        const childLevel = drillLevels[rowsNestLevel]
+        const isExpanded = Boolean(childLevel && childLevel.name === region.name)
+
+        return (
+          <div
+            key={region.key ?? `${rowsNestLevel}:${region.name}`}
+            className="flex flex-col gap-1"
+          >
+            <CountryRow
+              country={region}
+              metric={metric}
+              sortMode={sortMode}
+              timeMode={timeMode}
+              isSelected={selectedCountries.includes(region.name)}
+              onToggle={onToggleCountry}
+              nestLevel={rowsNestLevel}
+              isExpanded={isExpanded}
+              onToggleExpand={(name) => onToggleExpansion(rowsNestLevel, name)}
+            />
+
+            {isExpanded ? (
+              <DrillLevelBody
+                level={childLevel}
+                rowsNestLevel={rowsNestLevel + 1}
+                drillLevels={drillLevels}
+                selectedCountries={selectedCountries}
+                onToggleCountry={onToggleCountry}
+                onToggleExpansion={onToggleExpansion}
+                metric={metric}
+                sortMode={sortMode}
+                timeMode={timeMode}
+                selectedDate={selectedDate}
+              />
+            ) : null}
+          </div>
+        )
+      })}
+
+      {!level?.error && level?.date && level.date !== selectedDate ? (
+        <p className="ty-small text-medium-grey" style={messageIndentStyle}>
+          Regions shown on nearest available date: {level.date}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -139,18 +236,8 @@ const SideBar = ({
   countries,
   selectedCountries,
   onToggleCountry,
-  expandedCountryName,
-  expandedCountryRows,
-  expandedCountryRowsDate,
-  isExpandedCountryRowsLoading,
-  expandedCountryRowsError,
-  expandedSubregionName,
-  expandedSubregionRows,
-  expandedSubregionRowsDate,
-  isExpandedSubregionRowsLoading,
-  expandedSubregionRowsError,
-  onToggleCountryExpansion,
-  onToggleSubregionExpansion,
+  drillLevels = [],
+  onToggleExpansion,
   onSelectTopTen,
   isTopTenSelected,
   onResetSidebar,
@@ -303,7 +390,8 @@ const SideBar = ({
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="flex flex-col gap-2">
             {countries.map((country) => {
-              const isExpanded = expandedCountryName === country.name
+              const topLevel = drillLevels[0]
+              const isExpanded = Boolean(topLevel && topLevel.name === country.name)
 
               return (
                 <div key={country.key ?? country.name} className="flex flex-col gap-1">
@@ -316,105 +404,22 @@ const SideBar = ({
                     onToggle={onToggleCountry}
                     nestLevel={0}
                     isExpanded={isExpanded}
-                    onToggleExpand={onToggleCountryExpansion}
+                    onToggleExpand={(name) => onToggleExpansion(0, name)}
                   />
 
                   {isExpanded ? (
-                    <div className="flex flex-col gap-1">
-                      {!isExpandedCountryRowsLoading &&
-                      expandedCountryRowsError &&
-                      expandedCountryRows.length === 0 ? (
-                        <p className="ty-small pl-7 text-medium-grey">
-                          Unable to load regions: {expandedCountryRowsError}
-                        </p>
-                      ) : null}
-
-                      {!isExpandedCountryRowsLoading &&
-                      !expandedCountryRowsError &&
-                      expandedCountryRows.length === 0 ? (
-                        <p className="ty-small pl-7 text-medium-grey">
-                          No region-level data is available for this country.
-                        </p>
-                      ) : null}
-
-                      {expandedCountryRows.length > 0
-                        ? expandedCountryRows.map((region) => (
-                            <div
-                              key={region.key ?? `${country.name}::${region.name}`}
-                              className="flex flex-col gap-1"
-                            >
-                              <CountryRow
-                                country={region}
-                                metric={metric}
-                                sortMode={sortMode}
-                                timeMode={timeMode}
-                                isSelected={selectedCountries.includes(region.name)}
-                                onToggle={onToggleCountry}
-                                nestLevel={1}
-                                isExpanded={expandedSubregionName === region.name}
-                                onToggleExpand={onToggleSubregionExpansion}
-                              />
-
-                              {expandedSubregionName === region.name ? (
-                                <div className="flex flex-col gap-1">
-                                  {!isExpandedSubregionRowsLoading &&
-                                  expandedSubregionRowsError &&
-                                  expandedSubregionRows.length === 0 ? (
-                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
-                                      Unable to load third-level regions: {expandedSubregionRowsError}
-                                    </p>
-                                  ) : null}
-
-                                  {!isExpandedSubregionRowsLoading &&
-                                  !expandedSubregionRowsError &&
-                                  expandedSubregionRows.length === 0 ? (
-                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
-                                      No third-level region data is available.
-                                    </p>
-                                  ) : null}
-
-                                  {expandedSubregionRows.length > 0
-                                    ? expandedSubregionRows.map((thirdRegion) => (
-                                        <CountryRow
-                                          key={
-                                            thirdRegion.key ??
-                                            `${country.name}::${region.name}::${thirdRegion.name}`
-                                          }
-                                          country={thirdRegion}
-                                          metric={metric}
-                                          sortMode={sortMode}
-                                          timeMode={timeMode}
-                                          isSelected={selectedCountries.includes(
-                                            thirdRegion.name
-                                          )}
-                                          onToggle={onToggleCountry}
-                                          nestLevel={2}
-                                        />
-                                      ))
-                                    : null}
-
-                                  {!expandedSubregionRowsError &&
-                                  expandedSubregionRowsDate &&
-                                  expandedSubregionRowsDate !== selectedDate ? (
-                                    <p className="ty-small pl-[3.25rem] text-medium-grey">
-                                      Third-level regions shown on nearest available date:{' '}
-                                      {expandedSubregionRowsDate}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-                          ))
-                        : null}
-
-                      {!expandedCountryRowsError &&
-                      expandedCountryRowsDate &&
-                      expandedCountryRowsDate !== selectedDate ? (
-                        <p className="ty-small pl-7 text-medium-grey">
-                          Regions shown on nearest available date: {expandedCountryRowsDate}
-                        </p>
-                      ) : null}
-                    </div>
+                    <DrillLevelBody
+                      level={topLevel}
+                      rowsNestLevel={1}
+                      drillLevels={drillLevels}
+                      selectedCountries={selectedCountries}
+                      onToggleCountry={onToggleCountry}
+                      onToggleExpansion={onToggleExpansion}
+                      metric={metric}
+                      sortMode={sortMode}
+                      timeMode={timeMode}
+                      selectedDate={selectedDate}
+                    />
                   ) : null}
                 </div>
               )

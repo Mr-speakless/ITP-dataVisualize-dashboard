@@ -7,13 +7,12 @@ import SelectedCountryChips from './chartConponents/SelectedCountryChips.jsx'
 import TimeProgressBar from './chartConponents/TimeProgressBar.jsx'
 import ViewSwitcher from './chartConponents/ViewSwitcher.jsx'
 import WorldProjectionMap from './chartConponents/WorldProjectionMap.jsx'
+import { useNestedRegionLevel, useNycCityRow } from './hooks/useNestedRegionLevel.js'
 import {
   DEFAULT_WORLD_DATE,
   buildCountryTrendSeriesPoints,
   buildTrendDateRange,
   buildWorldCountryRows,
-  fetchWorldNestedDaySnapshot,
-  fetchWorldNestedMeta,
   fetchWorldNestedSeries,
   fetchWorldRegionSeries,
   fetchWorldDaySnapshot,
@@ -31,6 +30,8 @@ const initialDisplayMode = {
 
 const initialSortMode = 'total'
 const initialSortDirection = 'desc'
+
+const EMPTY_ROWS = []
 
 function sortCountries(countries, metric, timeMode, sortMode, sortDirection) {
   return [...countries].sort((left, right) => {
@@ -65,66 +66,30 @@ function getEarliestAvailableWorldDate(meta) {
   return meta?.c_dates?.[0] ?? DEFAULT_WORLD_DATE
 }
 
-function resolveNearestAvailableDate(meta, targetDate) {
-  const availableDates = Array.isArray(meta?.c_dates) ? meta.c_dates : []
+// While the user is drilled into a country, selection is confined to what is
+// currently on screen: the country, every expanded region on the path, and the
+// rows of the deepest expanded level. `levels[i]` is `{ name, rows }` for drill
+// level i (0 = the expanded country and its subregion rows).
+function buildDrillSelectionScope(levels) {
+  const topName = levels[0]?.name
 
-  if (availableDates.length === 0) {
-    return ''
-  }
-
-  if (availableDates.includes(targetDate)) {
-    return targetDate
-  }
-
-  const latestBeforeTarget = availableDates.filter((date) => date <= targetDate).at(-1)
-  return latestBeforeTarget ?? availableDates[availableDates.length - 1]
-}
-
-function buildExpandedCountryFrameKey(countryName, snapshotDate) {
-  return `${countryName}::${snapshotDate}`
-}
-
-function buildExpandedCountryLatestKey(countryName) {
-  return `${countryName}::__latest__`
-}
-
-function buildExpandedSubregionFrameKey(countryName, subregionName, snapshotDate) {
-  return `${countryName}::${subregionName}::${snapshotDate}`
-}
-
-function buildExpandedSubregionLatestKey(countryName, subregionName) {
-  return `${countryName}::${subregionName}::__latest__`
-}
-
-function buildExpandedSelectionScope({
-  expandedCountryName,
-  expandedCountryRows,
-  expandedSubregionName,
-  expandedSubregionRows,
-}) {
-  if (!expandedCountryName) {
+  if (!topName) {
     return null
   }
 
-  if (expandedSubregionName) {
-    return new Set([
-      expandedCountryName,
-      expandedSubregionName,
-      ...(Array.isArray(expandedSubregionRows) ? expandedSubregionRows : []).map(
-        (region) => region.name
-      ),
-    ])
-  }
+  const scope = new Set([topName])
+  let deepestExpandedIndex = 0
 
-  return new Set([
-    expandedCountryName,
-    ...(Array.isArray(expandedCountryRows) ? expandedCountryRows : []).map(
-      (region) => region.name
-    ),
-    ...(Array.isArray(expandedSubregionRows) ? expandedSubregionRows : []).map(
-      (region) => region.name
-    ),
-  ])
+  levels.forEach((level, index) => {
+    if (level.name) {
+      scope.add(level.name)
+      deepestExpandedIndex = index
+    }
+  })
+
+  ;(levels[deepestExpandedIndex]?.rows ?? []).forEach((region) => scope.add(region.name))
+
+  return scope
 }
 
 const MiddleChartArea = () => {
@@ -141,16 +106,10 @@ const MiddleChartArea = () => {
   const [sortMode, setSortMode] = useState(initialSortMode)
   const [sortDirection, setSortDirection] = useState(initialSortDirection)
   const [selectedCountries, setSelectedCountries] = useState([])
-  const [expandedCountryName, setExpandedCountryName] = useState('')
-  const [expandedCountryRows, setExpandedCountryRows] = useState([])
-  const [expandedCountryRowsDate, setExpandedCountryRowsDate] = useState('')
-  const [isExpandedCountryRowsLoading, setIsExpandedCountryRowsLoading] = useState(false)
-  const [expandedCountryRowsError, setExpandedCountryRowsError] = useState('')
-  const [expandedSubregionName, setExpandedSubregionName] = useState('')
-  const [expandedSubregionRows, setExpandedSubregionRows] = useState([])
-  const [expandedSubregionRowsDate, setExpandedSubregionRowsDate] = useState('')
-  const [isExpandedSubregionRowsLoading, setIsExpandedSubregionRowsLoading] = useState(false)
-  const [expandedSubregionRowsError, setExpandedSubregionRowsError] = useState('')
+  const [level2Name, setLevel2Name] = useState('')
+  const [level3Name, setLevel3Name] = useState('')
+  const [level4Name, setLevel4Name] = useState('')
+  const [level5Name, setLevel5Name] = useState('')
   const [hoveredCountryName, setHoveredCountryName] = useState('')
   const [countrySeriesByName, setCountrySeriesByName] = useState({})
   const [worldSnapshotByDate, setWorldSnapshotByDate] = useState({})
@@ -161,13 +120,61 @@ const MiddleChartArea = () => {
   const [error, setError] = useState('')
   const [seriesError, setSeriesError] = useState('')
   const pendingMapDatesRef = useRef(new Set())
-  const expandedCountryFrameCacheRef = useRef(new Map())
-  const expandedSubregionFrameCacheRef = useRef(new Map())
   const controlsRowRef = useRef(null)
   const regionalSnapshotDate = useMemo(
     () => (chart ? selectedDate : timelineDate || selectedDate),
     [chart, selectedDate, timelineDate]
   )
+
+  // JHU stopped emitting the "New York City" county row in 2020, so synthesise
+  // a live one from the NYC warehouse and splice it into the New York counties.
+  const nycCityRow = useNycCityRow({
+    enabled: level2Name === 'United States' && level3Name === 'New York',
+    snapshotDate: regionalSnapshotDate,
+  })
+  const level3ExtraRows = useMemo(
+    () => (nycCityRow ? [nycCityRow] : EMPTY_ROWS),
+    [nycCityRow]
+  )
+
+  // Level 2..5 of the region drill-down. Each level loads the children of its
+  // own `name` (a row shown one level up); its ancestors form `ancestorPath`.
+  const level2 = useNestedRegionLevel({
+    name: level2Name,
+    setName: setLevel2Name,
+    ancestorPath: '',
+    parentRows: countries,
+    snapshotDate: regionalSnapshotDate,
+    enabled: true,
+  })
+  const level3 = useNestedRegionLevel({
+    name: level3Name,
+    setName: setLevel3Name,
+    ancestorPath: level2Name,
+    parentRows: level2.rows,
+    snapshotDate: regionalSnapshotDate,
+    enabled: Boolean(level2Name),
+    extraRows: level3ExtraRows,
+  })
+  const level4 = useNestedRegionLevel({
+    name: level4Name,
+    setName: setLevel4Name,
+    ancestorPath: [level2Name, level3Name].filter(Boolean).join('::'),
+    parentRows: level3.rows,
+    snapshotDate: regionalSnapshotDate,
+    enabled: Boolean(level2Name && level3Name),
+  })
+  const level5 = useNestedRegionLevel({
+    name: level5Name,
+    setName: setLevel5Name,
+    ancestorPath: [level2Name, level3Name, level4Name].filter(Boolean).join('::'),
+    parentRows: level4.rows,
+    snapshotDate: regionalSnapshotDate,
+    enabled: Boolean(level2Name && level3Name && level4Name),
+  })
+  // Rebuilt every render (each hook returns a fresh object); only read
+  // synchronously in event handlers and reset, so identity churn is harmless.
+  const drillLevels = [level2, level3, level4, level5]
 
   useEffect(() => {
     const controller = new AbortController()
@@ -308,201 +315,6 @@ const MiddleChartArea = () => {
   }, [chart, meta, timelineDate, selectedDate, worldSnapshotByDate])
 
   useEffect(() => {
-    if (!expandedCountryName) {
-      setExpandedCountryRows([])
-      setExpandedCountryRowsDate('')
-      setExpandedCountryRowsError('')
-      setIsExpandedCountryRowsLoading(false)
-      return
-    }
-
-    const controller = new AbortController()
-
-    async function loadExpandedCountryRows() {
-      const countryFrameKey = buildExpandedCountryFrameKey(
-        expandedCountryName,
-        regionalSnapshotDate
-      )
-      const countryLatestKey = buildExpandedCountryLatestKey(expandedCountryName)
-      const cachedFrame =
-        expandedCountryFrameCacheRef.current.get(countryFrameKey) ??
-        expandedCountryFrameCacheRef.current.get(countryLatestKey)
-
-      if (cachedFrame) {
-        setExpandedCountryRows(cachedFrame.rows)
-        setExpandedCountryRowsDate(cachedFrame.date)
-      }
-
-      setIsExpandedCountryRowsLoading(true)
-      setExpandedCountryRowsError('')
-
-      try {
-        const subregionMeta = await fetchWorldNestedMeta(
-          [expandedCountryName],
-          controller.signal
-        )
-        const subregionDate = resolveNearestAvailableDate(subregionMeta, regionalSnapshotDate)
-
-        if (!subregionDate) {
-          setExpandedCountryRows([])
-          setExpandedCountryRowsDate('')
-          return
-        }
-
-        const subregionDaySnapshot = await fetchWorldNestedDaySnapshot(
-          [expandedCountryName],
-          subregionDate,
-          controller.signal
-        )
-        const subregionRows = buildWorldCountryRows(
-          subregionMeta,
-          subregionDaySnapshot,
-          {
-            parentRegionName: expandedCountryName,
-            regionLevel: 2,
-            seriesPathHierarchy: [expandedCountryName],
-          }
-        )
-
-        const nextFrame = {
-          date: subregionDate,
-          rows: subregionRows,
-        }
-        expandedCountryFrameCacheRef.current.set(countryFrameKey, nextFrame)
-        expandedCountryFrameCacheRef.current.set(countryLatestKey, nextFrame)
-
-        setExpandedCountryRows(subregionRows)
-        setExpandedCountryRowsDate(subregionDate)
-      } catch (loadError) {
-        if (loadError.name !== 'AbortError') {
-          setExpandedCountryRowsError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Unknown error while loading subregion data'
-          )
-        }
-      } finally {
-        setIsExpandedCountryRowsLoading(false)
-      }
-    }
-
-    loadExpandedCountryRows()
-
-    return () => controller.abort()
-  }, [expandedCountryName, regionalSnapshotDate])
-
-  useEffect(() => {
-    if (!expandedCountryName) {
-      setExpandedSubregionName('')
-      setExpandedSubregionRows([])
-      setExpandedSubregionRowsDate('')
-      setExpandedSubregionRowsError('')
-      setIsExpandedSubregionRowsLoading(false)
-      return
-    }
-
-    if (!expandedSubregionName) {
-      return
-    }
-
-    if (!expandedCountryRows.some((region) => region.name === expandedSubregionName)) {
-      setExpandedSubregionName('')
-      setExpandedSubregionRows([])
-      setExpandedSubregionRowsDate('')
-      setExpandedSubregionRowsError('')
-      setIsExpandedSubregionRowsLoading(false)
-    }
-  }, [expandedCountryName, expandedCountryRows, expandedSubregionName])
-
-  useEffect(() => {
-    if (!expandedCountryName || !expandedSubregionName) {
-      setExpandedSubregionRows([])
-      setExpandedSubregionRowsDate('')
-      setExpandedSubregionRowsError('')
-      setIsExpandedSubregionRowsLoading(false)
-      return
-    }
-
-    const controller = new AbortController()
-
-    async function loadExpandedSubregionRows() {
-      const subregionFrameKey = buildExpandedSubregionFrameKey(
-        expandedCountryName,
-        expandedSubregionName,
-        regionalSnapshotDate
-      )
-      const subregionLatestKey = buildExpandedSubregionLatestKey(
-        expandedCountryName,
-        expandedSubregionName
-      )
-      const cachedFrame =
-        expandedSubregionFrameCacheRef.current.get(subregionFrameKey) ??
-        expandedSubregionFrameCacheRef.current.get(subregionLatestKey)
-
-      if (cachedFrame) {
-        setExpandedSubregionRows(cachedFrame.rows)
-        setExpandedSubregionRowsDate(cachedFrame.date)
-      }
-
-      setIsExpandedSubregionRowsLoading(true)
-      setExpandedSubregionRowsError('')
-
-      try {
-        const thirdLevelMeta = await fetchWorldNestedMeta(
-          [expandedCountryName, expandedSubregionName],
-          controller.signal
-        )
-        const thirdLevelDate = resolveNearestAvailableDate(thirdLevelMeta, regionalSnapshotDate)
-
-        if (!thirdLevelDate) {
-          setExpandedSubregionRows([])
-          setExpandedSubregionRowsDate('')
-          return
-        }
-
-        const thirdLevelDaySnapshot = await fetchWorldNestedDaySnapshot(
-          [expandedCountryName, expandedSubregionName],
-          thirdLevelDate,
-          controller.signal
-        )
-        const thirdLevelRows = buildWorldCountryRows(
-          thirdLevelMeta,
-          thirdLevelDaySnapshot,
-          {
-            parentRegionName: expandedSubregionName,
-            regionLevel: 3,
-            seriesPathHierarchy: [expandedCountryName, expandedSubregionName],
-          }
-        )
-
-        const nextFrame = {
-          date: thirdLevelDate,
-          rows: thirdLevelRows,
-        }
-        expandedSubregionFrameCacheRef.current.set(subregionFrameKey, nextFrame)
-        expandedSubregionFrameCacheRef.current.set(subregionLatestKey, nextFrame)
-
-        setExpandedSubregionRows(thirdLevelRows)
-        setExpandedSubregionRowsDate(thirdLevelDate)
-      } catch (loadError) {
-        if (loadError.name !== 'AbortError') {
-          setExpandedSubregionRowsError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Unknown error while loading third-level region data'
-          )
-        }
-      } finally {
-        setIsExpandedSubregionRowsLoading(false)
-      }
-    }
-
-    loadExpandedSubregionRows()
-
-    return () => controller.abort()
-  }, [expandedCountryName, expandedSubregionName, regionalSnapshotDate])
-
-  useEffect(() => {
     if (!Array.isArray(meta?.c_dates) || meta.c_dates.length === 0) {
       return
     }
@@ -573,28 +385,95 @@ const MiddleChartArea = () => {
     )
   }, [searchQuery, sortedCountries])
 
-  const sortedExpandedCountryRows = useMemo(
+  const sortedLevel2Rows = useMemo(
     () =>
       sortCountries(
-        expandedCountryRows,
+        level2.rows,
         displayMode.metric,
         displayMode.timeMode,
         sortMode,
         sortDirection
       ),
-    [displayMode.metric, displayMode.timeMode, expandedCountryRows, sortMode, sortDirection]
+    [displayMode.metric, displayMode.timeMode, level2.rows, sortMode, sortDirection]
   )
 
-  const sortedExpandedSubregionRows = useMemo(
+  const sortedLevel3Rows = useMemo(
     () =>
       sortCountries(
-        expandedSubregionRows,
+        level3.rows,
         displayMode.metric,
         displayMode.timeMode,
         sortMode,
         sortDirection
       ),
-    [displayMode.metric, displayMode.timeMode, expandedSubregionRows, sortMode, sortDirection]
+    [displayMode.metric, displayMode.timeMode, level3.rows, sortMode, sortDirection]
+  )
+
+  const sortedLevel4Rows = useMemo(
+    () =>
+      sortCountries(
+        level4.rows,
+        displayMode.metric,
+        displayMode.timeMode,
+        sortMode,
+        sortDirection
+      ),
+    [displayMode.metric, displayMode.timeMode, level4.rows, sortMode, sortDirection]
+  )
+
+  const sortedLevel5Rows = useMemo(
+    () =>
+      sortCountries(
+        level5.rows,
+        displayMode.metric,
+        displayMode.timeMode,
+        sortMode,
+        sortDirection
+      ),
+    [displayMode.metric, displayMode.timeMode, level5.rows, sortMode, sortDirection]
+  )
+
+  const sortedDrillRows = useMemo(
+    () => [sortedLevel2Rows, sortedLevel3Rows, sortedLevel4Rows, sortedLevel5Rows],
+    [sortedLevel2Rows, sortedLevel3Rows, sortedLevel4Rows, sortedLevel5Rows]
+  )
+
+  const drillScopeLevels = useMemo(
+    () => [
+      { name: level2.name, rows: sortedLevel2Rows },
+      { name: level3.name, rows: sortedLevel3Rows },
+      { name: level4.name, rows: sortedLevel4Rows },
+      { name: level5.name, rows: sortedLevel5Rows },
+    ],
+    [
+      level2.name,
+      level3.name,
+      level4.name,
+      level5.name,
+      sortedLevel2Rows,
+      sortedLevel3Rows,
+      sortedLevel4Rows,
+      sortedLevel5Rows,
+    ]
+  )
+
+  const sidebarDrillLevels = useMemo(
+    () => [
+      { name: level2.name, rows: sortedLevel2Rows, date: level2.date, isLoading: level2.isLoading, error: level2.error },
+      { name: level3.name, rows: sortedLevel3Rows, date: level3.date, isLoading: level3.isLoading, error: level3.error },
+      { name: level4.name, rows: sortedLevel4Rows, date: level4.date, isLoading: level4.isLoading, error: level4.error },
+      { name: level5.name, rows: sortedLevel5Rows, date: level5.date, isLoading: level5.isLoading, error: level5.error },
+    ],
+    [
+      level2.name, level2.date, level2.isLoading, level2.error,
+      level3.name, level3.date, level3.isLoading, level3.error,
+      level4.name, level4.date, level4.isLoading, level4.error,
+      level5.name, level5.date, level5.isLoading, level5.error,
+      sortedLevel2Rows,
+      sortedLevel3Rows,
+      sortedLevel4Rows,
+      sortedLevel5Rows,
+    ]
   )
 
   const filteredTopTenCountryNames = useMemo(
@@ -615,22 +494,17 @@ const MiddleChartArea = () => {
     }
 
     setSelectedCountries((currentSelection) => {
-      if (expandedCountryName) {
-        const expandedSelectionScope = buildExpandedSelectionScope({
-          expandedCountryName,
-          expandedCountryRows: sortedExpandedCountryRows,
-          expandedSubregionName,
-          expandedSubregionRows: sortedExpandedSubregionRows,
-        })
-        const availableExpandedSelection = currentSelection.filter((name) =>
-          expandedSelectionScope?.has(name)
+      if (level2.name) {
+        const drillSelectionScope = buildDrillSelectionScope(drillScopeLevels)
+        const availableDrillSelection = currentSelection.filter((name) =>
+          drillSelectionScope?.has(name)
         )
 
-        if (availableExpandedSelection.length > 0) {
-          return availableExpandedSelection
+        if (availableDrillSelection.length > 0) {
+          return availableDrillSelection
         }
 
-        return [expandedCountryName]
+        return [level2.name]
       }
 
       const topLevelCountryNames = new Set(countries.map((country) => country.name))
@@ -656,36 +530,32 @@ const MiddleChartArea = () => {
     countries,
     displayMode.metric,
     displayMode.timeMode,
-    expandedCountryName,
-    expandedSubregionName,
-    sortedExpandedCountryRows,
-    sortedExpandedSubregionRows,
+    drillScopeLevels,
+    level2.name,
     sortMode,
     sortDirection,
   ])
 
   const selectedCountryRows = useMemo(() => {
-    const countriesByName = new Map(countries.map((country) => [country.name, country]))
+    const rowsByName = new Map(countries.map((country) => [country.name, country]))
 
-    sortedExpandedCountryRows.forEach((country) => {
-      countriesByName.set(country.name, country)
-    })
-    sortedExpandedSubregionRows.forEach((country) => {
-      countriesByName.set(country.name, country)
+    sortedDrillRows.forEach((levelRows) => {
+      levelRows.forEach((region) => rowsByName.set(region.name, region))
     })
 
     return selectedCountries
-      .map((countryName) => countriesByName.get(countryName))
+      .map((countryName) => rowsByName.get(countryName))
       .filter(Boolean)
-  }, [countries, selectedCountries, sortedExpandedCountryRows, sortedExpandedSubregionRows])
+  }, [countries, selectedCountries, sortedDrillRows])
 
   const countryRowsByName = useMemo(() => {
     const rowsByName = new Map()
     countries.forEach((country) => rowsByName.set(country.name, country))
-    sortedExpandedCountryRows.forEach((country) => rowsByName.set(country.name, country))
-    sortedExpandedSubregionRows.forEach((country) => rowsByName.set(country.name, country))
+    sortedDrillRows.forEach((levelRows) => {
+      levelRows.forEach((region) => rowsByName.set(region.name, region))
+    })
     return rowsByName
-  }, [countries, sortedExpandedCountryRows, sortedExpandedSubregionRows])
+  }, [countries, sortedDrillRows])
 
   const handleToggleRegionSelection = (regionInput) => {
     setSelectedCountries((currentSelection) => {
@@ -700,13 +570,8 @@ const MiddleChartArea = () => {
           ? regionInput
           : countryRowsByName.get(regionName)
 
-      if (expandedCountryName) {
-        const allowedNames = buildExpandedSelectionScope({
-          expandedCountryName,
-          expandedCountryRows: sortedExpandedCountryRows,
-          expandedSubregionName,
-          expandedSubregionRows: sortedExpandedSubregionRows,
-        })
+      if (level2.name) {
+        const allowedNames = buildDrillSelectionScope(drillScopeLevels)
 
         if (!allowedNames?.has(regionName)) {
           return currentSelection
@@ -716,20 +581,75 @@ const MiddleChartArea = () => {
       const isSelecting = !currentSelection.includes(regionName)
       let nextSelection = toggleCountrySelection(currentSelection, regionName)
 
-      if (isSelecting && Number(regionRow?.regionLevel) === 3) {
-        const parentSecondLevelName =
-          regionRow?.seriesPathHierarchy?.[1] ?? regionRow?.parentRegionName
-        const secondLevelNames = new Set(
-          sortedExpandedCountryRows.map((country) => country.name)
-        )
+      // Selecting a nested region drops selected siblings of its ancestors so
+      // the chart stays on one path (e.g. picking a county clears other states).
+      const regionLevelNumber = Number(regionRow?.regionLevel)
+
+      if (isSelecting && regionLevelNumber >= 3) {
+        const ancestorNames = new Set(regionRow?.seriesPathHierarchy ?? [])
+        const shallowerRowNames = new Set()
+
+        sortedDrillRows.forEach((levelRows, index) => {
+          if (index + 2 < regionLevelNumber) {
+            levelRows.forEach((region) => shallowerRowNames.add(region.name))
+          }
+        })
 
         nextSelection = nextSelection.filter(
-          (name) => !secondLevelNames.has(name) || name === parentSecondLevelName
+          (name) => !shallowerRowNames.has(name) || ancestorNames.has(name)
         )
       }
 
       return nextSelection
     })
+  }
+
+  const handleToggleExpansion = (levelIndex, regionName) => {
+    const targetLevel = drillLevels[levelIndex]
+
+    if (!targetLevel) {
+      return
+    }
+
+    const nextName = targetLevel.name === regionName ? '' : regionName
+
+    targetLevel.setName(nextName)
+
+    for (let deeperIndex = levelIndex + 1; deeperIndex < drillLevels.length; deeperIndex += 1) {
+      drillLevels[deeperIndex].reset()
+    }
+
+    if (nextName) {
+      const ancestorNames = drillLevels
+        .slice(0, levelIndex)
+        .map((level) => level.name)
+        .filter(Boolean)
+
+      setSelectedCountries([...ancestorNames, nextName])
+      return
+    }
+
+    if (levelIndex === 0) {
+      const countryNames = new Set(countries.map((country) => country.name))
+      setSelectedCountries((currentSelection) =>
+        currentSelection.filter((name) => countryNames.has(name))
+      )
+      return
+    }
+
+    const survivorNames = new Set()
+
+    drillLevels.slice(0, levelIndex).forEach((level, index) => {
+      if (level.name) {
+        survivorNames.add(level.name)
+      }
+
+      sortedDrillRows[index].forEach((region) => survivorNames.add(region.name))
+    })
+
+    setSelectedCountries((currentSelection) =>
+      currentSelection.filter((name) => survivorNames.has(name))
+    )
   }
 
   const requestedMapCountries = useMemo(() => {
@@ -911,62 +831,8 @@ const MiddleChartArea = () => {
                 countries: filteredCountries,
                 selectedCountries,
                 onToggleCountry: handleToggleRegionSelection,
-                expandedCountryName,
-                expandedCountryRows: sortedExpandedCountryRows,
-                expandedCountryRowsDate,
-                isExpandedCountryRowsLoading,
-                expandedCountryRowsError,
-                expandedSubregionName,
-                expandedSubregionRows: sortedExpandedSubregionRows,
-                expandedSubregionRowsDate,
-                isExpandedSubregionRowsLoading,
-                expandedSubregionRowsError,
-                onToggleCountryExpansion: (countryName) =>
-                  setExpandedCountryName((currentExpandedCountryName) => {
-                    const nextExpandedCountryName =
-                      currentExpandedCountryName === countryName ? '' : countryName
-
-                    setExpandedSubregionName('')
-                    setExpandedSubregionRows([])
-                    setExpandedSubregionRowsDate('')
-                    setExpandedSubregionRowsError('')
-
-                    if (nextExpandedCountryName) {
-                      setSelectedCountries([nextExpandedCountryName])
-                    } else {
-                      setSelectedCountries((currentSelection) =>
-                        currentSelection.filter((name) =>
-                          countries.some((country) => country.name === name)
-                        )
-                      )
-                    }
-
-                    return nextExpandedCountryName
-                  }),
-                onToggleSubregionExpansion: (subregionName) =>
-                  setExpandedSubregionName((currentExpandedSubregionName) => {
-                    const nextExpandedSubregionName =
-                      currentExpandedSubregionName === subregionName
-                        ? ''
-                        : subregionName
-
-                    if (nextExpandedSubregionName) {
-                      setSelectedCountries([
-                        expandedCountryName,
-                        nextExpandedSubregionName,
-                      ].filter(Boolean))
-                    } else {
-                      setSelectedCountries((currentSelection) =>
-                        currentSelection.filter(
-                          (name) =>
-                            name === expandedCountryName ||
-                            sortedExpandedCountryRows.some((country) => country.name === name)
-                        )
-                      )
-                    }
-
-                    return nextExpandedSubregionName
-                  }),
+                drillLevels: sidebarDrillLevels,
+                onToggleExpansion: handleToggleExpansion,
                 onSelectTopTen: () =>
                   setSelectedCountries((currentSelection) => {
                     if (
@@ -990,14 +856,7 @@ const MiddleChartArea = () => {
                   setSelectedDate(getFallbackWorldDate(meta))
                   setTimelineStartDate(getEarliestAvailableWorldDate(meta))
                   setTimelineDate(getFallbackWorldDate(meta))
-                  setExpandedCountryName('')
-                  setExpandedCountryRows([])
-                  setExpandedCountryRowsDate('')
-                  setExpandedCountryRowsError('')
-                  setExpandedSubregionName('')
-                  setExpandedSubregionRows([])
-                  setExpandedSubregionRowsDate('')
-                  setExpandedSubregionRowsError('')
+                  drillLevels.forEach((level) => level.reset())
                   setSelectedCountries(
                     getTopTenCountryNames(
                       sortCountries(
@@ -1039,10 +898,10 @@ const MiddleChartArea = () => {
           ) : (
             <WorldProjectionMap
               countries={mapCountries}
-              regionalCountries={sortedExpandedCountryRows}
-              subregionalCountries={sortedExpandedSubregionRows}
-              focusedCountryName={expandedCountryName}
-              focusedSubregionName={expandedSubregionName}
+              regionalCountries={sortedLevel2Rows}
+              subregionalCountries={sortedLevel3Rows}
+              focusedCountryName={level2.name}
+              focusedSubregionName={level3.name}
               displayMode={displayMode}
               selectedCountries={selectedCountries}
               timelineDate={mapDisplayDate}
@@ -1077,4 +936,3 @@ const MiddleChartArea = () => {
 }
 
 export default MiddleChartArea
-

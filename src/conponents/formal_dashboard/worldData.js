@@ -162,6 +162,57 @@ export function buildWorldSubregionPathByHierarchy(regionHierarchy = []) {
   return `${worldDataPath}/c_subs/${normalizedHierarchy.join('/c_subs/')}`
 }
 
+// New York City has its own maintained warehouse (`c_data/nyc`) that breaks the
+// city down by borough and then by zipcode. It lives outside the `c_data/world`
+// tree, so any drill path that passes through it must be re-rooted there.
+const NYC_DATA_PATH = 'c_data/nyc'
+const NYC_ROW_NAME = 'New York City'
+const NYC_HIERARCHY_PREFIX = ['United States', 'New York', NYC_ROW_NAME]
+
+function hierarchyStartsWith(hierarchy, prefix) {
+  return (
+    hierarchy.length >= prefix.length &&
+    prefix.every((segment, index) => hierarchy[index] === segment)
+  )
+}
+
+// Maps a region hierarchy of raw region names to the base data path its
+// meta/day/series files live under. Everything routes through the world tree
+// except the New York City subtree, which is served from `c_data/nyc`.
+export function resolveRegionBasePath(regionHierarchy = []) {
+  const hierarchy = (Array.isArray(regionHierarchy) ? regionHierarchy : []).filter(Boolean)
+
+  if (hierarchyStartsWith(hierarchy, NYC_HIERARCHY_PREFIX)) {
+    const remainder = hierarchy
+      .slice(NYC_HIERARCHY_PREFIX.length)
+      .map((regionName) => normalizeWorldRegionPathName(regionName))
+
+    if (remainder.length === 0) {
+      return NYC_DATA_PATH
+    }
+
+    return `${NYC_DATA_PATH}/c_subs/${remainder.join('/c_subs/')}`
+  }
+
+  return buildWorldSubregionPathByHierarchy(hierarchy)
+}
+
+// The world `New York` county meta lists a `New York City` row with no `n_subs`
+// (JHU stopped reporting it as one unit in 2020), so nothing would flag it as
+// expandable. We know it drills into the `c_data/nyc` warehouse, so mark it.
+export function regionHasKnownSubregions(regionName, seriesPathHierarchy = []) {
+  const hierarchy = Array.isArray(seriesPathHierarchy)
+    ? seriesPathHierarchy.filter(Boolean)
+    : []
+
+  return (
+    regionName === NYC_ROW_NAME &&
+    hierarchy.length === 2 &&
+    hierarchy[0] === 'United States' &&
+    hierarchy[1] === 'New York'
+  )
+}
+
 export async function fetchWorldRegionSeries(regionName, signal) {
   const normalizedRegionName = normalizeWorldRegionPathName(regionName)
 
@@ -181,18 +232,14 @@ export async function fetchWorldSubregionDaySnapshot(parentRegionName, date, sig
 }
 
 export async function fetchWorldNestedMeta(regionHierarchy, signal) {
-  return fetchWorldJson(
-    'c_meta.json',
-    signal,
-    buildWorldSubregionPathByHierarchy(regionHierarchy)
-  )
+  return fetchWorldJson('c_meta.json', signal, resolveRegionBasePath(regionHierarchy))
 }
 
 export async function fetchWorldNestedDaySnapshot(regionHierarchy, date, signal) {
   return fetchWorldJson(
     `c_days/${date}.json`,
     signal,
-    buildWorldSubregionPathByHierarchy(regionHierarchy)
+    resolveRegionBasePath(regionHierarchy)
   )
 }
 
@@ -200,7 +247,24 @@ export async function fetchWorldSubregionSeries(parentRegionName, regionName, si
   return fetchWorldNestedSeries([parentRegionName], regionName, signal)
 }
 
+export function isNycCityRegion(regionHierarchy = [], regionName = '') {
+  const hierarchy = (Array.isArray(regionHierarchy) ? regionHierarchy : []).filter(Boolean)
+
+  return (
+    regionName === NYC_ROW_NAME &&
+    hierarchy.length === 2 &&
+    hierarchy[0] === 'United States' &&
+    hierarchy[1] === 'New York'
+  )
+}
+
 export async function fetchWorldNestedSeries(regionHierarchy, regionName, signal) {
+  // The synthesised "New York City" county row is fed by the NYC warehouse's
+  // city-wide totals series rather than a (non-existent) world c_series file.
+  if (isNycCityRegion(regionHierarchy, regionName)) {
+    return fetchWorldJson('c_series/_totals.json', signal, NYC_DATA_PATH)
+  }
+
   const normalizedRegionName = normalizeWorldRegionPathName(regionName)
 
   if (!normalizedRegionName) {
@@ -210,8 +274,54 @@ export async function fetchWorldNestedSeries(regionHierarchy, regionName, signal
   return fetchWorldJson(
     `c_series/${normalizedRegionName}.json`,
     signal,
-    buildWorldSubregionPathByHierarchy(regionHierarchy)
+    resolveRegionBasePath(regionHierarchy)
   )
+}
+
+// Rolls a set of already-normalised child rows up into a single parent row
+// (used to give "New York City" a live entry at the county level, summed from
+// its boroughs).
+export function buildAggregateRegionRow(childRows, options = {}) {
+  const {
+    name = '',
+    parentRegionName = '',
+    seriesPathHierarchy = [],
+    hasSubregions = true,
+  } = options
+  const rows = Array.isArray(childRows) ? childRows : []
+  const sumBy = (pick) => rows.reduce((total, row) => total + (Number(pick(row)) || 0), 0)
+
+  const population = sumBy((row) => row.population)
+  const totalCases = sumBy((row) => row.totals?.cases)
+  const totalDeaths = sumBy((row) => row.totals?.deaths)
+  const dailyCases = sumBy((row) => row.daily?.cases)
+  const dailyDeaths = sumBy((row) => row.daily?.deaths)
+  const seriesKey = seriesPathHierarchy.length > 0
+    ? `${seriesPathHierarchy.join('::')}::${name}`
+    : name
+
+  return {
+    key: seriesKey,
+    name,
+    caption: '',
+    parentRegionName,
+    regionLevel: seriesPathHierarchy.length + 1,
+    seriesPathHierarchy,
+    isSubregion: seriesPathHierarchy.length > 0,
+    hasSubregions,
+    seriesKey,
+    population,
+    totals: { cases: totalCases, deaths: totalDeaths },
+    daily: { cases: dailyCases, deaths: dailyDeaths },
+    per100kTotals: {
+      cases: computePer100k(totalCases, population),
+      deaths: computePer100k(totalDeaths, population),
+    },
+    per100kDaily: {
+      cases: computePer100k(dailyCases, population),
+      deaths: computePer100k(dailyDeaths, population),
+    },
+  }
 }
 
 export function isDateAvailable(meta, date) {
@@ -247,9 +357,11 @@ export function buildWorldCountryRows(meta, dayItems, context = '') {
       ? seriesPathHierarchy.length + 1
       : 1
   const isSubregionLevel = regionLevel > 1
+  const captionByRegion = meta?.c_sub_captions ?? {}
 
   return items.map((item) => {
     const regionMeta = metaByRegion[item.c_ref] ?? {}
+    const caption = captionByRegion[item.c_ref] ?? ''
     const population = regionMeta.c_people ?? 0
     const totalCases = item.totals?.Cases ?? 0
     const totalDeaths = item.totals?.Deaths ?? 0
@@ -263,11 +375,14 @@ export function buildWorldCountryRows(meta, dayItems, context = '') {
     return {
       key: seriesKey,
       name: item.c_ref,
+      caption,
       parentRegionName,
       regionLevel,
       seriesPathHierarchy,
       isSubregion: isSubregionLevel,
-      hasSubregions: Number(regionMeta.n_subs ?? 0) > 0,
+      hasSubregions:
+        Number(regionMeta.n_subs ?? 0) > 0 ||
+        regionHasKnownSubregions(item.c_ref, seriesPathHierarchy),
       seriesKey,
       population,
       totals: {
